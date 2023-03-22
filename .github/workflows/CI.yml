@@ -72,55 +72,12 @@ jobs:
     needs: check
     name: cargo check (feature combinations)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # cargo hack --feature-powerset will have a significant permutation
-        # number, we can't just use --all as it increases the runtime
-        # further than what we would like to
-        subcrate:
-        - tracing-attributes
-        - tracing-core
-        - tracing-futures
-        - tracing-log
-        - tracing-macros
-        - tracing-serde
-        - tracing-tower
-        - tracing-opentelemetry
-        - tracing
-        - tracing-subscriber
     steps:
     - uses: actions/checkout@v3
     - uses: dtolnay/rust-toolchain@stable
-
     - name: install cargo-hack
       uses: taiki-e/install-action@cargo-hack
-    - name: cargo hack check
-      working-directory: ${{ matrix.subcrate }}
-      # tracing and tracing-subscriber have too many features to be checked by
-      # cargo-hack --feature-powerset with all features in the powerset, so
-      # exclude some
-      run: |
-        CARGO_HACK=(cargo hack check --feature-powerset --no-dev-deps)
-        case "${{ matrix.subcrate }}" in
-          tracing)
-            EXCLUDE_FEATURES=(
-              max_level_off max_level_error max_level_warn max_level_info
-              max_level_debug max_level_trace release_max_level_off
-              release_max_level_error release_max_level_warn
-              release_max_level_info release_max_level_debug
-              release_max_level_trace
-            )
-            ${CARGO_HACK[@]} --exclude-features "${EXCLUDE_FEATURES[*]}"
-            ;;
-          tracing-subscriber)
-            INCLUDE_FEATURES=(fmt ansi json registry env-filter)
-            ${CARGO_HACK[@]} --include-features "${INCLUDE_FEATURES[*]}"
-            ;;
-          *)
-            ${CARGO_HACK[@]}
-            ;;
-        esac
-      shell: bash
+    - name: cargo hack check --feature-powerset --no-dev-deps
 
   check-msrv:
     # Run `cargo check` on our minimum supported Rust version (1.56.0). This
