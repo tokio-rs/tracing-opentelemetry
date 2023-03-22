@@ -1,0 +1,14 @@
+version: 2
+updates:
+- package-ecosystem: cargo
+  directory: "/"
+  schedule:
+    interval: daily
+  open-pull-requests-limit: 10
+  ignore:
+  - dependency-name: opentelemetry-jaeger
+    versions:
+    - 0.12.0
+  - dependency-name: opentelemetry
+    versions:
+    - 0.13.0
