@@ -77,7 +77,7 @@ jobs:
     - uses: dtolnay/rust-toolchain@stable
     - name: install cargo-hack
       uses: taiki-e/install-action@cargo-hack
-    - name: cargo hack check --feature-powerset --no-dev-deps
+    - run: cargo hack check --feature-powerset --no-dev-deps
 
   check-msrv:
     # Run `cargo check` on our minimum supported Rust version (1.56.0). This
