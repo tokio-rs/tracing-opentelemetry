@@ -78,15 +78,16 @@ where
 //
 // See https://github.com/tokio-rs/tracing/blob/4dad420ee1d4607bad79270c1520673fa6266a3d/tracing-error/src/layer.rs
 pub(crate) struct WithContext(
+    #[allow(clippy::type_complexity)] // who cares
     fn(&tracing::Dispatch, &span::Id, f: &mut dyn FnMut(&mut OtelData, &dyn PreSampledTracer)),
 );
 
 impl WithContext {
     // This function allows a function to be called in the context of the
     // "remembered" subscriber.
-    pub(crate) fn with_context<'a>(
+    pub(crate) fn with_context(
         &self,
-        dispatch: &'a tracing::Dispatch,
+        dispatch: &tracing::Dispatch,
         id: &span::Id,
         mut f: impl FnMut(&mut OtelData, &dyn PreSampledTracer),
     ) {
