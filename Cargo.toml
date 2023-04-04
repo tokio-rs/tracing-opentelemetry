@@ -40,6 +40,8 @@ thiserror = { version = "1.0.31", optional = true }
 async-trait = "0.1.56"
 criterion = { version = "0.3.6", default-features = false }
 opentelemetry-jaeger = "0.16.0"
+tracing = { version = "0.1.35", default-features = false, features = ["std", "attributes"] }
+tracing-subscriber = { version = "0.3.0", default-features = false, features = ["registry", "std"] }
 futures-util = { version = "0.3", default-features = false }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
