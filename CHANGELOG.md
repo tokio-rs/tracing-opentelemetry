@@ -5,7 +5,7 @@
 - Upgrade to `v0.19.0` of `opentelemetry` (#12)
   For list of breaking changes in OpenTelemetry, see the
   [v0.19.0 changelog](https://github.com/open-telemetry/opentelemetry-rust/blob/main/opentelemetry/CHANGELOG.md#v0190).
-- Update MSRV to require rust v1.60+ as `opentelemetry` requires it now (#12)
+- Update MSRV to require Rust 1.60+, as `opentelemetry` requires it now (#12)
 
 # 0.18.0 (September 18, 2022)
 
