@@ -38,7 +38,7 @@ thiserror = { version = "1.0.31", optional = true }
 
 [dev-dependencies]
 async-trait = "0.1.56"
-criterion = { version = "0.3.6", default-features = false }
+criterion = { version = "0.4.0", default-features = false }
 opentelemetry-jaeger = "0.18.0"
 futures-util = { version = "0.3", default-features = false }
 tokio = { version = "1", features = ["full"] }
