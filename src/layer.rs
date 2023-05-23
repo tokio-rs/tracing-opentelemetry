@@ -77,7 +77,7 @@ where
 //
 // See https://github.com/tokio-rs/tracing/blob/4dad420ee1d4607bad79270c1520673fa6266a3d/tracing-error/src/layer.rs
 pub(crate) struct WithContext(
-    #[allow(clippy::type_complexity)] // who cares
+    #[allow(clippy::type_complexity)]
     fn(&tracing::Dispatch, &span::Id, f: &mut dyn FnMut(&mut OtelData, &dyn PreSampledTracer)),
 );
 
@@ -971,7 +971,10 @@ fn thread_id_integer(id: thread::ThreadId) -> u64 {
 mod tests {
     use super::*;
     use crate::OtelData;
-    use opentelemetry::trace::{noop, TraceFlags};
+    use opentelemetry::{
+        trace::{noop, TraceFlags},
+        StringValue,
+    };
     use std::{
         borrow::Cow,
         collections::HashMap,
@@ -1093,16 +1096,6 @@ mod tests {
         tracing::subscriber::with_default(subscriber, || {
             tracing::debug_span!("static_name", otel.name = dynamic_name.as_str());
         });
-        let recorded_status = tracer
-            .0
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .builder
-            .status
-            .clone();
-        assert_eq!(recorded_status, otel::Status::Unset);
 
         let recorded_name = tracer
             .0

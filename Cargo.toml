@@ -43,6 +43,7 @@ opentelemetry-jaeger = "0.18.0"
 futures-util = { version = "0.3", default-features = false }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
+tracing = { version = "0.1.35", default-features = false, features = ["std", "attributes"] }
 
 [lib]
 bench = false
