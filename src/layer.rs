@@ -25,6 +25,7 @@ const SPAN_KIND_FIELD: &str = "otel.kind";
 const SPAN_STATUS_CODE_FIELD: &str = "otel.status_code";
 const SPAN_STATUS_MESSAGE_FIELD: &str = "otel.status_message";
 
+const EVENT_EXCEPTION_NAME: &str = "exception";
 const FIELD_EXCEPTION_MESSAGE: &str = "exception.message";
 const FIELD_EXCEPTION_STACKTRACE: &str = "exception.stacktrace";
 
@@ -180,6 +181,27 @@ impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
     fn record_str(&mut self, field: &field::Field, value: &str) {
         match field.name() {
             "message" => self.event_builder.name = value.to_string().into(),
+            // While tracing supports the error primitive, the instrumentation macro does not
+            // use the primitive and instead uses the debug or display primitive.
+            // In both cases, an event with an empty name and with an error attribute is created.
+            "error" if self.event_builder.name.is_empty() => {
+                if self.sem_conv_config.error_events_to_status {
+                    if let Some(span) = &mut self.span_builder {
+                        span.status = otel::Status::error(format!("{:?}", value));
+                    }
+                }
+                if self.sem_conv_config.error_events_to_exceptions {
+                    self.event_builder.name = EVENT_EXCEPTION_NAME.into();
+                    self.event_builder.attributes.push(KeyValue::new(
+                        FIELD_EXCEPTION_MESSAGE,
+                        format!("{:?}", value),
+                    ));
+                } else {
+                    self.event_builder
+                        .attributes
+                        .push(KeyValue::new("error", format!("{:?}", value)));
+                }
+            }
             // Skip fields that are actually log metadata that have already been handled
             #[cfg(feature = "tracing-log")]
             name if name.starts_with("log.") => (),
@@ -198,6 +220,27 @@ impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
     fn record_debug(&mut self, field: &field::Field, value: &dyn fmt::Debug) {
         match field.name() {
             "message" => self.event_builder.name = format!("{:?}", value).into(),
+            // While tracing supports the error primitive, the instrumentation macro does not
+            // use the primitive and instead uses the debug or display primitive.
+            // In both cases, an event with an empty name and with an error attribute is created.
+            "error" if self.event_builder.name.is_empty() => {
+                if self.sem_conv_config.error_events_to_status {
+                    if let Some(span) = &mut self.span_builder {
+                        span.status = otel::Status::error(format!("{:?}", value));
+                    }
+                }
+                if self.sem_conv_config.error_events_to_exceptions {
+                    self.event_builder.name = EVENT_EXCEPTION_NAME.into();
+                    self.event_builder.attributes.push(KeyValue::new(
+                        FIELD_EXCEPTION_MESSAGE,
+                        format!("{:?}", value),
+                    ));
+                } else {
+                    self.event_builder
+                        .attributes
+                        .push(KeyValue::new("error", format!("{:?}", value)));
+                }
+            }
             // Skip fields that are actually log metadata that have already been handled
             #[cfg(feature = "tracing-log")]
             name if name.starts_with("log.") => (),
@@ -289,6 +332,25 @@ struct SemConvConfig {
     ///
     /// Note that this uses tracings `record_error` which is only implemented for `(dyn Error + 'static)`.
     error_records_to_exceptions: bool,
+
+    /// If a function is instrumented and returns a `Result`, should the error
+    /// value be propagated to the span status.
+    ///
+    /// Without this enabled, the span status will be "Error" with an empty description
+    /// when at least one error event is recorded in the span.
+    ///
+    /// Note: the instrument macro will emit an error event if the function returns the `Err` variant.
+    /// This is not affected by this setting. Disabling this will only affect the span status.
+    error_events_to_status: bool,
+
+    /// If an event with an empty name and a field named `error` is recorded,
+    /// should the event be rewritten to have the name `exception` and the field `exception.message`
+    ///
+    /// Follows the semantic conventions for exceptions.
+    ///
+    /// Note: the instrument macro will emit an error event if the function returns the `Err` variant.
+    /// This is not affected by this setting. Disabling this will only affect the created fields on the OTel span.
+    error_events_to_exceptions: bool,
 }
 
 struct SpanAttributeVisitor<'a> {
@@ -439,7 +501,10 @@ where
             sem_conv_config: SemConvConfig {
                 error_fields_to_exceptions: true,
                 error_records_to_exceptions: true,
+                error_events_to_exceptions: true,
+                error_events_to_status: true,
             },
+
             get_context: WithContext(Self::get_context),
             _registry: marker::PhantomData,
         }
@@ -534,6 +599,41 @@ where
         Self {
             sem_conv_config: SemConvConfig {
                 error_fields_to_exceptions,
+                ..self.sem_conv_config
+            },
+            ..self
+        }
+    }
+
+    /// Sets whether or not an event considered for exception mapping (see [`OpenTelemetryLayer::with_error_recording`])
+    /// should be propagated to the span status error description.
+    ///
+    ///
+    /// By default, these events do set the span status error description.
+    pub fn with_error_events_to_status(self, error_events_to_status: bool) -> Self {
+        Self {
+            sem_conv_config: SemConvConfig {
+                error_events_to_status,
+                ..self.sem_conv_config
+            },
+            ..self
+        }
+    }
+
+    /// Sets whether or not a subset of events following the described schema are mapped to
+    /// events following the [OpenTelemetry semantic conventions for
+    /// exceptions][conv].
+    ///
+    /// * Only events without a message field (unnamed events) and at least one field with the name error
+    /// are considered for mapping.
+    ///
+    /// By default, these events are mapped.
+    ///
+    /// [conv]: https://github.com/open-telemetry/semantic-conventions/tree/main/docs/exceptions/
+    pub fn with_error_events_to_exceptions(self, error_events_to_exceptions: bool) -> Self {
+        Self {
+            sem_conv_config: SemConvConfig {
+                error_events_to_exceptions,
                 ..self.sem_conv_config
             },
             ..self
@@ -912,6 +1012,7 @@ where
                 vec![Key::new("level").string(meta.level().as_str()), target],
                 0,
             );
+
             event.record(&mut SpanEventVisitor {
                 event_builder: &mut otel_event,
                 span_builder,
