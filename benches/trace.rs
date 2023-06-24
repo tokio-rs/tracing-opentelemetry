@@ -4,6 +4,7 @@ use opentelemetry::{
     trace::{SpanBuilder, Tracer as _, TracerProvider as _},
     Context,
 };
+use pprof::criterion::{Output, PProfProfiler};
 use std::time::SystemTime;
 use tracing::trace_span;
 use tracing_subscriber::prelude::*;
@@ -122,5 +123,9 @@ fn tracing_harness() {
     dummy();
 }
 
-criterion_group!(benches, many_children);
+criterion_group! {
+    name = benches;
+    config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    targets = many_children
+}
 criterion_main!(benches);
