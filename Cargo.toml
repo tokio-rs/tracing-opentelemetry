@@ -38,7 +38,7 @@ thiserror = { version = "1.0.31", optional = true }
 
 [dev-dependencies]
 async-trait = "0.1.56"
-criterion = { version = "0.4.0", default-features = false, features = ["html_reports"] }
+criterion = { version = "0.5.1", default-features = false, features = ["html_reports"] }
 opentelemetry-jaeger = "0.18.0"
 pprof = { version = "0.11.1", features = ["flamegraph", "criterion"] }
 futures-util = { version = "0.3", default-features = false }
