@@ -1,5 +1,5 @@
 use crate::layer::WithContext;
-use opentelemetry::{trace::SpanContext, Context, KeyValue};
+use opentelemetry::{trace::SpanContext, Context, Key, KeyValue, Value};
 
 /// Utility functions to allow tracing [`Span`]s to accept and return
 /// [OpenTelemetry] [`Context`]s.
@@ -114,6 +114,25 @@ pub trait OpenTelemetrySpanExt {
     /// make_request(Span::current().context())
     /// ```
     fn context(&self) -> Context;
+
+    /// Sets an OpenTelemetry attribute directly for this span, bypassing `tracing`.
+    /// If fields set here conflict with `tracing` fields, the `tracing` fields will supersede fields set with `set_attribute`.
+    /// This allows for more than 32 fields.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use opentelemetry::Context;
+    /// use tracing_opentelemetry::OpenTelemetrySpanExt;
+    /// use tracing::Span;
+    ///
+    /// // Generate a tracing span as usual
+    /// let app_root = tracing::span!(tracing::Level::INFO, "app_start");
+    ///
+    /// // Set the `http.request.header.x_forwarded_for` attribute to `example`.
+    /// app_root.set_attribute("http.request.header.x_forwarded_for", "example");
+    /// ```
+    fn set_attribute(&self, key: impl Into<Key>, value: impl Into<Value>);
 }
 
 impl OpenTelemetrySpanExt for tracing::Span {
@@ -167,5 +186,25 @@ impl OpenTelemetrySpanExt for tracing::Span {
         });
 
         cx.unwrap_or_default()
+    }
+
+    fn set_attribute(&self, key: impl Into<Key>, value: impl Into<Value>) {
+        self.with_subscriber(move |(id, subscriber)| {
+            if let Some(get_context) = subscriber.downcast_ref::<WithContext>() {
+                let mut key = Some(key.into());
+                let mut value = Some(value.into());
+                get_context.with_context(subscriber, id, move |builder, _| {
+                    if builder.builder.attributes.is_none() {
+                        builder.builder.attributes = Some(Default::default());
+                    }
+                    builder
+                        .builder
+                        .attributes
+                        .as_mut()
+                        .unwrap()
+                        .insert(key.take().unwrap(), value.take().unwrap());
+                })
+            }
+        });
     }
 }
