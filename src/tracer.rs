@@ -88,7 +88,6 @@ impl PreSampledTracer for Tracer {
                 builder.span_kind.as_ref().unwrap_or(&SpanKind::Internal),
                 builder.attributes.as_ref().unwrap_or(&OrderMap::default()),
                 builder.links.as_deref().unwrap_or(&[]),
-                self.instrumentation_library(),
             ));
 
             process_sampling_result(
@@ -169,7 +168,7 @@ mod tests {
         let provider = TracerProvider::default();
         let tracer = provider.tracer("test");
         let mut builder = SpanBuilder::from_name("empty".to_string());
-        builder.span_id = Some(SpanId::from(1u64.to_be_bytes()));
+        builder.span_id = Some(SpanId::from(1u64));
         builder.trace_id = None;
         let parent_cx = OtelContext::new();
         let cx = tracer.sampled_context(&mut OtelData { builder, parent_cx });
@@ -224,8 +223,8 @@ mod tests {
 
     fn span_context(trace_flags: TraceFlags, is_remote: bool) -> SpanContext {
         SpanContext::new(
-            TraceId::from(1u128.to_be_bytes()),
-            SpanId::from(1u64.to_be_bytes()),
+            TraceId::from(1u128),
+            SpanId::from(1u64),
             trace_flags,
             is_remote,
             Default::default(),

@@ -1160,10 +1160,10 @@ mod tests {
     fn trace_id_from_existing_context() {
         let tracer = TestTracer(Arc::new(Mutex::new(None)));
         let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
-        let trace_id = otel::TraceId::from(42u128.to_be_bytes());
+        let trace_id = otel::TraceId::from(42u128);
         let existing_cx = OtelContext::current_with_span(TestSpan(otel::SpanContext::new(
             trace_id,
-            otel::SpanId::from(1u64.to_be_bytes()),
+            otel::SpanId::from(1u64),
             TraceFlags::default(),
             false,
             Default::default(),
