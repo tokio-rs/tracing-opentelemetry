@@ -40,7 +40,6 @@ pub(crate) enum InstrumentType {
 impl Instruments {
     pub(crate) fn update_metric(
         &self,
-        // cx: &OtelContext,
         meter: &Meter,
         instrument_type: InstrumentType,
         metric_name: &'static str,
