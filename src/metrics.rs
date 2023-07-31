@@ -229,14 +229,14 @@ impl<'a> Visit for MetricVisitor<'a> {
 /// use tracing_opentelemetry::MetricsLayer;
 /// use tracing_subscriber::layer::SubscriberExt;
 /// use tracing_subscriber::Registry;
-/// # use opentelemetry::sdk::metrics::controllers::BasicController;
+/// # use opentelemetry::sdk::metrics::MeterProvider;
 ///
-/// // Constructing a BasicController is out-of-scope for the docs here, but there
+/// // Constructing a MeterProvider is out-of-scope for the docs here, but there
 /// // are examples in the opentelemetry repository. See:
-/// // https://github.com/open-telemetry/opentelemetry-rust/blob/d4b9befea04bcc7fc19319a6ebf5b5070131c486/examples/basic-otlp/src/main.rs#L35-L52
-/// # let controller: BasicController = unimplemented!();
+/// // https://github.com/open-telemetry/opentelemetry-rust/blob/dfeac078ff7853e7dc814778524b93470dfa5c9c/examples/metrics-basic/src/main.rs#L7
+/// # let meter_provider: MeterProvider = unimplemented!();
 ///
-/// let opentelemetry_metrics =  MetricsLayer::new(controller);
+/// let opentelemetry_metrics =  MetricsLayer::new(meter_provider);
 /// let subscriber = Registry::default().with(opentelemetry_metrics);
 /// tracing::subscriber::set_global_default(subscriber).unwrap();
 /// ```
