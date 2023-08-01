@@ -59,8 +59,8 @@
 //!
 //! // Create a new OpenTelemetry trace pipeline that prints to stdout
 //! let provider = TracerProvider::builder()
-//!                .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
-//!                .build();
+//!     .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
+//!     .build();
 //! let tracer = provider.tracer("readme_example");
 //!
 //! // Create a tracing layer with the configured tracer
