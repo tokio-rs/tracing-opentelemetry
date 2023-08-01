@@ -259,8 +259,9 @@ where
                     InstrumentKind::Histogram => {
                         let histogram =
                             metric.data.as_any().downcast_ref::<Histogram<T>>().unwrap();
-                        let counts = histogram.data_points.first().unwrap().count;
-                        assert!(counts > 0);
+                        let histogram_data = histogram.data_points.first().unwrap();
+                        assert!(histogram_data.count > 0);
+                        assert_eq!(histogram_data.sum, self.expected_value);
                     }
                     unexpected => {
                         panic!("InstrumentKind {:?} not currently supported!", unexpected)
