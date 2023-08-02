@@ -1,3 +1,17 @@
+# 0.20.0 (August 1, 2023)
+
+### Added
+
+- Add `OpenTelemetrySpanExt::set_attribute` function (#34)
+
+### Breaking Changes
+
+- Upgrade to `v0.20.0` of `opentelemetry` (#36)
+  For list of breaking changes in OpenTelemetry, see the
+  [v0.20.0 changelog](https://github.com/open-telemetry/opentelemetry-rust/blob/v0.20.0/opentelemetry-api/CHANGELOG.md#v0200).
+
+Thanks to @ymgyt, @mladedav, @shaun-cox, and @Protryon for contributing to this release!
+
 # 0.19.0 (May 23, 2023)
 
 ### Breaking Changes
