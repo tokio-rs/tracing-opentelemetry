@@ -4,6 +4,7 @@ use opentelemetry::{
     trace::{SpanBuilder, Tracer as _, TracerProvider as _},
     Context,
 };
+#[cfg(not(target_os = "windows"))]
 use pprof::criterion::{Output, PProfProfiler};
 use std::time::SystemTime;
 use tracing::trace_span;
@@ -123,9 +124,16 @@ fn tracing_harness() {
     dummy();
 }
 
+#[cfg(not(target_os = "windows"))]
 criterion_group! {
     name = benches;
     config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    targets = many_children
+}
+#[cfg(target_os = "windows")]
+criterion_group! {
+    name = benches;
+    config = Criterion::default();
     targets = many_children
 }
 criterion_main!(benches);
