@@ -1,8 +1,15 @@
 use std::{collections::HashMap, fmt, sync::RwLock};
-use tracing::{field::Visit, Subscriber};
-use tracing_core::Field;
+use tracing::{
+    callsite::Identifier,
+    field::{FieldSet, Visit},
+    Subscriber,
+};
+use tracing_core::{Field, Interest};
 
-use opentelemetry::metrics::{Counter, Histogram, Meter, MeterProvider, UpDownCounter};
+use opentelemetry::{
+    metrics::{Counter, Histogram, Meter, MeterProvider, UpDownCounter},
+    KeyValue, Value,
+};
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -43,6 +50,7 @@ impl Instruments {
         meter: &Meter,
         instrument_type: InstrumentType,
         metric_name: &'static str,
+        attributes: &[KeyValue],
     ) {
         fn update_or_insert<T>(
             map: &MetricsMap<T>,
@@ -73,7 +81,7 @@ impl Instruments {
                     &self.u64_counter,
                     metric_name,
                     || meter.u64_counter(metric_name).init(),
-                    |ctr| ctr.add(value, &[]),
+                    |ctr| ctr.add(value, attributes),
                 );
             }
             InstrumentType::CounterF64(value) => {
@@ -81,7 +89,7 @@ impl Instruments {
                     &self.f64_counter,
                     metric_name,
                     || meter.f64_counter(metric_name).init(),
-                    |ctr| ctr.add(value, &[]),
+                    |ctr| ctr.add(value, attributes),
                 );
             }
             InstrumentType::UpDownCounterI64(value) => {
@@ -89,7 +97,7 @@ impl Instruments {
                     &self.i64_up_down_counter,
                     metric_name,
                     || meter.i64_up_down_counter(metric_name).init(),
-                    |ctr| ctr.add(value, &[]),
+                    |ctr| ctr.add(value, attributes),
                 );
             }
             InstrumentType::UpDownCounterF64(value) => {
@@ -97,7 +105,7 @@ impl Instruments {
                     &self.f64_up_down_counter,
                     metric_name,
                     || meter.f64_up_down_counter(metric_name).init(),
-                    |ctr| ctr.add(value, &[]),
+                    |ctr| ctr.add(value, attributes),
                 );
             }
             InstrumentType::HistogramU64(value) => {
@@ -105,7 +113,7 @@ impl Instruments {
                     &self.u64_histogram,
                     metric_name,
                     || meter.u64_histogram(metric_name).init(),
-                    |rec| rec.record(value, &[]),
+                    |rec| rec.record(value, attributes),
                 );
             }
             InstrumentType::HistogramI64(value) => {
@@ -113,7 +121,7 @@ impl Instruments {
                     &self.i64_histogram,
                     metric_name,
                     || meter.i64_histogram(metric_name).init(),
-                    |rec| rec.record(value, &[]),
+                    |rec| rec.record(value, attributes),
                 );
             }
             InstrumentType::HistogramF64(value) => {
@@ -121,7 +129,7 @@ impl Instruments {
                     &self.f64_histogram,
                     metric_name,
                     || meter.f64_histogram(metric_name).init(),
-                    |rec| rec.record(value, &[]),
+                    |rec| rec.record(value, attributes),
                 );
             }
         };
@@ -129,8 +137,8 @@ impl Instruments {
 }
 
 pub(crate) struct MetricVisitor<'a> {
-    pub(crate) instruments: &'a Instruments,
-    pub(crate) meter: &'a Meter,
+    attributes: &'a mut Vec<KeyValue>,
+    visited_metrics: &'a mut Vec<(&'static str, InstrumentType)>,
 }
 
 impl<'a> Visit for MetricVisitor<'a> {
@@ -140,18 +148,12 @@ impl<'a> Visit for MetricVisitor<'a> {
 
     fn record_u64(&mut self, field: &Field, value: u64) {
         if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_MONOTONIC_COUNTER) {
-            self.instruments.update_metric(
-                self.meter,
-                InstrumentType::CounterU64(value),
-                metric_name,
-            );
+            self.visited_metrics
+                .push((metric_name, InstrumentType::CounterU64(value)));
         } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
             if value <= I64_MAX {
-                self.instruments.update_metric(
-                    self.meter,
-                    InstrumentType::UpDownCounterI64(value as i64),
-                    metric_name,
-                );
+                self.visited_metrics
+                    .push((metric_name, InstrumentType::UpDownCounterI64(value as i64)));
             } else {
                 eprintln!(
                     "[tracing-opentelemetry]: Received Counter metric, but \
@@ -161,56 +163,82 @@ impl<'a> Visit for MetricVisitor<'a> {
                 );
             }
         } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_HISTOGRAM) {
-            self.instruments.update_metric(
-                self.meter,
-                InstrumentType::HistogramU64(value),
-                metric_name,
-            );
+            self.visited_metrics
+                .push((metric_name, InstrumentType::HistogramU64(value)));
+        } else if value <= I64_MAX {
+            self.attributes
+                .push(KeyValue::new(field.name(), Value::I64(value as i64)));
         }
     }
 
     fn record_f64(&mut self, field: &Field, value: f64) {
         if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_MONOTONIC_COUNTER) {
-            self.instruments.update_metric(
-                self.meter,
-                InstrumentType::CounterF64(value),
-                metric_name,
-            );
+            self.visited_metrics
+                .push((metric_name, InstrumentType::CounterF64(value)));
         } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
-            self.instruments.update_metric(
-                self.meter,
-                InstrumentType::UpDownCounterF64(value),
-                metric_name,
-            );
+            self.visited_metrics
+                .push((metric_name, InstrumentType::UpDownCounterF64(value)));
         } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_HISTOGRAM) {
-            self.instruments.update_metric(
-                self.meter,
-                InstrumentType::HistogramF64(value),
-                metric_name,
-            );
+            self.visited_metrics
+                .push((metric_name, InstrumentType::HistogramF64(value)));
+        } else {
+            self.attributes
+                .push(KeyValue::new(field.name(), Value::F64(value)));
         }
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
         if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_MONOTONIC_COUNTER) {
-            self.instruments.update_metric(
-                self.meter,
-                InstrumentType::CounterU64(value as u64),
-                metric_name,
-            );
+            self.visited_metrics
+                .push((metric_name, InstrumentType::CounterU64(value as u64)));
         } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
-            self.instruments.update_metric(
-                self.meter,
-                InstrumentType::UpDownCounterI64(value),
-                metric_name,
-            );
+            self.visited_metrics
+                .push((metric_name, InstrumentType::UpDownCounterI64(value)));
         } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_HISTOGRAM) {
-            self.instruments.update_metric(
-                self.meter,
-                InstrumentType::HistogramI64(value),
-                metric_name,
-            );
+            self.visited_metrics
+                .push((metric_name, InstrumentType::HistogramI64(value)));
+        } else {
+            self.attributes.push(KeyValue::new(field.name(), value));
         }
+    }
+
+    fn record_str(&mut self, field: &Field, value: &str) {
+        self.attributes
+            .push(KeyValue::new(field.name(), value.to_owned()));
+    }
+
+    fn record_bool(&mut self, field: &Field, value: bool) {
+        self.attributes.push(KeyValue::new(field.name(), value));
+    }
+}
+
+struct Callsites {
+    callsites: RwLock<HashMap<Identifier, CallsiteInfo>>,
+}
+
+#[derive(Default)]
+struct CallsiteInfo {
+    has_metrics_fields: bool,
+}
+
+impl Callsites {
+    fn new() -> Self {
+        Callsites {
+            callsites: Default::default(),
+        }
+    }
+
+    fn register_metrics_callsite(&self, callsite: Identifier, info: CallsiteInfo) {
+        self.callsites.write().unwrap().insert(callsite, info);
+    }
+
+    fn has_metrics_field(&self, callsite: &Identifier) -> bool {
+        self.callsites
+            .read()
+            .unwrap()
+            .get(callsite)
+            .map(|info| info.has_metrics_fields)
+            .unwrap_or(false)
     }
 }
 
@@ -322,6 +350,7 @@ impl<'a> Visit for MetricVisitor<'a> {
 pub struct MetricsLayer {
     meter: Meter,
     instruments: Instruments,
+    callsites: Callsites,
 }
 
 impl MetricsLayer {
@@ -339,7 +368,17 @@ impl MetricsLayer {
         MetricsLayer {
             meter,
             instruments: Default::default(),
+            callsites: Callsites::new(),
         }
+    }
+
+    fn has_metrics_fields(&self, field_set: &FieldSet) -> bool {
+        field_set.iter().any(|field| {
+            let name = field.name();
+            name.starts_with(METRIC_PREFIX_COUNTER)
+                || name.starts_with(METRIC_PREFIX_MONOTONIC_COUNTER)
+                || name.starts_with(METRIC_PREFIX_HISTOGRAM)
+        })
     }
 }
 
@@ -348,10 +387,42 @@ where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
     fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
-        let mut metric_visitor = MetricVisitor {
-            instruments: &self.instruments,
-            meter: &self.meter,
-        };
-        event.record(&mut metric_visitor);
+        if self
+            .callsites
+            .has_metrics_field(&event.metadata().callsite())
+        {
+            let mut attributes = Vec::new();
+            let mut visited_metrics = Vec::new();
+            let mut metric_visitor = MetricVisitor {
+                attributes: &mut attributes,
+                visited_metrics: &mut visited_metrics,
+            };
+            event.record(&mut metric_visitor);
+
+            // associate attrivutes with visited metrics
+            visited_metrics
+                .into_iter()
+                .for_each(|(metric_name, value)| {
+                    self.instruments.update_metric(
+                        &self.meter,
+                        value,
+                        metric_name,
+                        attributes.as_slice(),
+                    );
+                })
+        }
+    }
+
+    fn register_callsite(&self, metadata: &'static tracing::Metadata<'static>) -> Interest {
+        if metadata.is_event() && self.has_metrics_fields(metadata.fields()) {
+            self.callsites.register_metrics_callsite(
+                metadata.callsite(),
+                CallsiteInfo {
+                    has_metrics_fields: true,
+                },
+            );
+        }
+
+        Interest::always()
     }
 }
