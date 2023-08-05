@@ -354,7 +354,7 @@ where
 struct MetricsFilter;
 
 impl MetricsFilter {
-    fn has_metrics_fields(&self, meta: &Metadata<'_>) -> bool {
+    fn is_metrics_event(&self, meta: &Metadata<'_>) -> bool {
         meta.is_event()
             && meta.fields().iter().any(|field| {
                 let name = field.name();
@@ -367,11 +367,11 @@ impl MetricsFilter {
 
 impl<S> Filter<S> for MetricsFilter {
     fn enabled(&self, meta: &Metadata<'_>, _cx: &Context<'_, S>) -> bool {
-        self.has_metrics_fields(meta)
+        self.is_metrics_event(meta)
     }
 
     fn callsite_enabled(&self, meta: &'static Metadata<'static>) -> Interest {
-        if self.has_metrics_fields(meta) {
+        if self.is_metrics_event(meta) {
             Interest::always()
         } else {
             Interest::never()
@@ -415,10 +415,6 @@ impl<S> Layer<S> for MetricsLayer<S>
 where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
-    fn on_register_dispatch(&self, collector: &tracing_core::Dispatch) {
-        self.inner.on_register_dispatch(collector)
-    }
-
     fn on_layer(&mut self, subscriber: &mut S) {
         self.inner.on_layer(subscriber)
     }
@@ -460,10 +456,6 @@ where
         ctx: Context<'_, S>,
     ) {
         self.inner.on_follows_from(span, follows, ctx)
-    }
-
-    fn event_enabled(&self, event: &tracing_core::Event<'_>, ctx: Context<'_, S>) -> bool {
-        self.inner.event_enabled(event, ctx)
     }
 
     fn on_event(&self, event: &tracing_core::Event<'_>, ctx: Context<'_, S>) {
