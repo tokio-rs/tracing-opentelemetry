@@ -57,6 +57,10 @@ bench = false
 name = "trace"
 harness = false
 
+[[bench]]
+name = "metrics"
+harness = false
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
