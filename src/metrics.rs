@@ -1,16 +1,18 @@
 use std::{collections::HashMap, fmt, sync::RwLock};
-use tracing::{
-    callsite::Identifier,
-    field::{FieldSet, Visit},
-    Subscriber,
-};
-use tracing_core::{Field, Interest};
+use tracing::{field::Visit, Subscriber};
+use tracing_core::{Field, Metadata};
 
 use opentelemetry::{
     metrics::{Counter, Histogram, Meter, MeterProvider, UpDownCounter},
     KeyValue, Value,
 };
-use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
+use tracing_subscriber::{
+    layer::{Context, Filter},
+    registry::LookupSpan,
+    Layer,
+};
+
+use smallvec::SmallVec;
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const INSTRUMENTATION_LIBRARY_NAME: &str = "tracing/tracing-opentelemetry";
@@ -137,8 +139,8 @@ impl Instruments {
 }
 
 pub(crate) struct MetricVisitor<'a> {
-    attributes: &'a mut Vec<KeyValue>,
-    visited_metrics: &'a mut Vec<(&'static str, InstrumentType)>,
+    attributes: &'a mut SmallVec<[KeyValue; 8]>,
+    visited_metrics: &'a mut SmallVec<[(&'static str, InstrumentType); 2]>,
 }
 
 impl<'a> Visit for MetricVisitor<'a> {
@@ -209,36 +211,6 @@ impl<'a> Visit for MetricVisitor<'a> {
 
     fn record_bool(&mut self, field: &Field, value: bool) {
         self.attributes.push(KeyValue::new(field.name(), value));
-    }
-}
-
-struct Callsites {
-    callsites: RwLock<HashMap<Identifier, CallsiteInfo>>,
-}
-
-#[derive(Default)]
-struct CallsiteInfo {
-    has_metrics_fields: bool,
-}
-
-impl Callsites {
-    fn new() -> Self {
-        Callsites {
-            callsites: Default::default(),
-        }
-    }
-
-    fn register_metrics_callsite(&self, callsite: Identifier, info: CallsiteInfo) {
-        self.callsites.write().unwrap().insert(callsite, info);
-    }
-
-    fn has_metrics_field(&self, callsite: &Identifier) -> bool {
-        self.callsites
-            .read()
-            .unwrap()
-            .get(callsite)
-            .map(|info| info.has_metrics_fields)
-            .unwrap_or(false)
     }
 }
 
@@ -350,7 +322,6 @@ impl Callsites {
 pub struct MetricsLayer {
     meter: Meter,
     instruments: Instruments,
-    callsites: Callsites,
 }
 
 impl MetricsLayer {
@@ -365,20 +336,11 @@ impl MetricsLayer {
             None::<&'static str>,
             None,
         );
+
         MetricsLayer {
             meter,
             instruments: Default::default(),
-            callsites: Callsites::new(),
         }
-    }
-
-    fn has_metrics_fields(&self, field_set: &FieldSet) -> bool {
-        field_set.iter().any(|field| {
-            let name = field.name();
-            name.starts_with(METRIC_PREFIX_COUNTER)
-                || name.starts_with(METRIC_PREFIX_MONOTONIC_COUNTER)
-                || name.starts_with(METRIC_PREFIX_HISTOGRAM)
-        })
     }
 }
 
@@ -387,42 +349,54 @@ where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
     fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
-        if self
-            .callsites
-            .has_metrics_field(&event.metadata().callsite())
-        {
-            let mut attributes = Vec::new();
-            let mut visited_metrics = Vec::new();
-            let mut metric_visitor = MetricVisitor {
-                attributes: &mut attributes,
-                visited_metrics: &mut visited_metrics,
-            };
-            event.record(&mut metric_visitor);
+        let mut attributes = SmallVec::new();
+        let mut visited_metrics = SmallVec::new();
+        let mut metric_visitor = MetricVisitor {
+            attributes: &mut attributes,
+            visited_metrics: &mut visited_metrics,
+        };
+        event.record(&mut metric_visitor);
 
-            // associate attrivutes with visited metrics
-            visited_metrics
-                .into_iter()
-                .for_each(|(metric_name, value)| {
-                    self.instruments.update_metric(
-                        &self.meter,
-                        value,
-                        metric_name,
-                        attributes.as_slice(),
-                    );
-                })
-        }
+        // associate attrivutes with visited metrics
+        visited_metrics
+            .into_iter()
+            .for_each(|(metric_name, value)| {
+                self.instruments.update_metric(
+                    &self.meter,
+                    value,
+                    metric_name,
+                    attributes.as_slice(),
+                );
+            })
     }
+}
 
-    fn register_callsite(&self, metadata: &'static tracing::Metadata<'static>) -> Interest {
-        if metadata.is_event() && self.has_metrics_fields(metadata.fields()) {
-            self.callsites.register_metrics_callsite(
-                metadata.callsite(),
-                CallsiteInfo {
-                    has_metrics_fields: true,
-                },
-            );
-        }
+impl<S> Filter<S> for MetricsLayer {
+    fn enabled(&self, meta: &Metadata<'_>, _cx: &Context<'_, S>) -> bool {
+        meta.is_event()
+            && meta.fields().iter().any(|field| {
+                let name = field.name();
+                name.starts_with(METRIC_PREFIX_COUNTER)
+                    || name.starts_with(METRIC_PREFIX_MONOTONIC_COUNTER)
+                    || name.starts_with(METRIC_PREFIX_HISTOGRAM)
+            })
+    }
+}
 
-        Interest::always()
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opentelemetry::metrics::noop::NoopMeterProvider;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    #[test]
+    fn layer_should_not_panic_on_non_metrics_event() {
+        let noop = NoopMeterProvider::new();
+        let layer = MetricsLayer::new(noop);
+        let subscriber = tracing_subscriber::registry().with(layer);
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::info!(key = "val", "foo");
+        });
     }
 }
