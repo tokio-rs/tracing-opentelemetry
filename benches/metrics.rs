@@ -18,7 +18,7 @@ fn metrics_events(c: &mut Criterion) {
         let _subscriber = tracing_subscriber::registry()
             .with(MetricsLayer::new(NoopMeterProvider::new()))
             .set_default();
-        group.bench_function("no_metrics_events", |b| {
+        group.bench_function("metrics_events_0_attr_0", |b| {
             b.iter(|| {
                 tracing::info!(key_1 = "va", "msg");
             })
@@ -29,9 +29,9 @@ fn metrics_events(c: &mut Criterion) {
         let _subscriber = tracing_subscriber::registry()
             .with(MetricsLayer::new(NoopMeterProvider::new()))
             .set_default();
-        group.bench_function("1_metrics_event", |b| {
+        group.bench_function("metrics_events_1_attr_0", |b| {
             b.iter(|| {
-                tracing::info!(monotonic_counter.foo = 1, "msg");
+                tracing::info!(monotonic_counter.c1 = 1, "msg");
             })
         });
     }
@@ -40,9 +40,9 @@ fn metrics_events(c: &mut Criterion) {
         let _subscriber = tracing_subscriber::registry()
             .with(MetricsLayer::new(NoopMeterProvider::new()))
             .set_default();
-        group.bench_function("2_metrics_events", |b| {
+        group.bench_function("metrics_events_2_attr_0", |b| {
             b.iter(|| {
-                tracing::info!(monotonic_counter.foo = 1, monotonic_counter.bar = 1, "msg");
+                tracing::info!(monotonic_counter.c1 = 1, monotonic_counter.c2 = 1, "msg");
             })
         });
     }
@@ -51,29 +51,13 @@ fn metrics_events(c: &mut Criterion) {
         let _subscriber = tracing_subscriber::registry()
             .with(MetricsLayer::new(NoopMeterProvider::new()))
             .set_default();
-        group.bench_function("1_metrics_event_with_attributes", |b| {
-            b.iter(|| {
-                tracing::info!(monotonic_counter.foo = 1, attr_1 = 10, "msg");
-            })
-        });
-    }
-
-    {
-        let _subscriber = tracing_subscriber::registry()
-            .with(MetricsLayer::new(NoopMeterProvider::new()))
-            .set_default();
-        group.bench_function("1_metrics_event_with_attributes_8", |b| {
+        group.bench_function("metrics_events_4_attr_0", |b| {
             b.iter(|| {
                 tracing::info!(
-                    monotonic_counter.foo = 1,
-                    attr_1 = 10,
-                    attr_2 = 20,
-                    attr_3 = 30,
-                    attr_4 = 40,
-                    attr_5 = 50,
-                    attr_6 = 60,
-                    attr_7 = 70,
-                    attr_8 = 80,
+                    monotonic_counter.c1 = 1,
+                    monotonic_counter.c2 = 1,
+                    monotonic_counter.c3 = 1,
+                    monotonic_counter.c4 = 1,
                     "msg"
                 );
             })
@@ -84,26 +68,90 @@ fn metrics_events(c: &mut Criterion) {
         let _subscriber = tracing_subscriber::registry()
             .with(MetricsLayer::new(NoopMeterProvider::new()))
             .set_default();
-        group.bench_function("no_metrics_event_with_attributes_12", |b| {
+        group.bench_function("metrics_events_8_attr_0", |b| {
             b.iter(|| {
                 tracing::info!(
-                    attr_1 = 10,
-                    attr_2 = 20,
-                    attr_3 = 30,
-                    attr_4 = 40,
-                    attr_5 = 50,
-                    attr_6 = 60,
-                    attr_7 = 70,
-                    attr_8 = 80,
-                    attr_9 = 90,
-                    attr_10 = 100,
-                    attr_11 = 110,
-                    attr_12 = 120,
+                    monotonic_counter.c1 = 1,
+                    monotonic_counter.c2 = 1,
+                    monotonic_counter.c3 = 1,
+                    monotonic_counter.c4 = 1,
+                    monotonic_counter.c5 = 1,
+                    monotonic_counter.c6 = 1,
+                    monotonic_counter.c7 = 1,
+                    monotonic_counter.c8 = 1,
                     "msg"
                 );
             })
         });
     }
+
+    {
+        let _subscriber = tracing_subscriber::registry()
+            .with(MetricsLayer::new(NoopMeterProvider::new()))
+            .set_default();
+        group.bench_function("metrics_events_1_attr_1", |b| {
+            b.iter(|| {
+                tracing::info!(monotonic_counter.c1 = 1, key_1 = 1_i64, "msg");
+            })
+        });
+    }
+
+    {
+        let _subscriber = tracing_subscriber::registry()
+            .with(MetricsLayer::new(NoopMeterProvider::new()))
+            .set_default();
+        group.bench_function("metrics_events_1_attr_2", |b| {
+            b.iter(|| {
+                tracing::info!(
+                    monotonic_counter.c1 = 1,
+                    key_1 = 1_i64,
+                    key_2 = 1_i64,
+                    "msg"
+                );
+            })
+        });
+    }
+
+    {
+        let _subscriber = tracing_subscriber::registry()
+            .with(MetricsLayer::new(NoopMeterProvider::new()))
+            .set_default();
+        group.bench_function("metrics_events_1_attr_4", |b| {
+            b.iter(|| {
+                tracing::info!(
+                    monotonic_counter.c1 = 1,
+                    key_1 = 1_i64,
+                    key_2 = 1_i64,
+                    key_3 = 1_i64,
+                    key_4 = 1_i64,
+                    "msg"
+                );
+            })
+        });
+    }
+
+    {
+        let _subscriber = tracing_subscriber::registry()
+            .with(MetricsLayer::new(NoopMeterProvider::new()))
+            .set_default();
+        group.bench_function("metrics_events_1_attr_8", |b| {
+            b.iter(|| {
+                tracing::info!(
+                    monotonic_counter.c1 = 1,
+                    key_1 = 1_i64,
+                    key_2 = 1_i64,
+                    key_3 = 1_i64,
+                    key_4 = 1_i64,
+                    key_5 = 1_i64,
+                    key_6 = 1_i64,
+                    key_7 = 1_i64,
+                    key_8 = 1_i64,
+                    "msg"
+                );
+            })
+        });
+    }
+    group.finish();
 }
 
 criterion_group! {
