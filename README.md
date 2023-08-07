@@ -103,9 +103,12 @@ $ firefox http://localhost:16686/
 
 ## Feature Flags
 
- - `metrics`: Enables the [`MetricsSubscriber`] type, a [subscriber] that
+ - `metrics`: Enables the [`MetricsLayer`] type, a [layer] that
    exports OpenTelemetry metrics from specifically-named events. This enables
    the `metrics` feature flag on the `opentelemetry` crate.
+
+[`MetricsLayer`]: https://docs.rs/tracing-opentelemetry/latest/tracing_opentelemetry/struct.MetricsLayer.html
+[layer]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
 
 ## Supported Rust Versions
 
