@@ -17,7 +17,7 @@ pub trait OpenTelemetrySpanExt {
     ///
     /// ```rust
     /// use opentelemetry::{propagation::TextMapPropagator, trace::TraceContextExt};
-    /// use opentelemetry::sdk::propagation::TraceContextPropagator;
+    /// use opentelemetry_sdk::propagation::TraceContextPropagator;
     /// use tracing_opentelemetry::OpenTelemetrySpanExt;
     /// use std::collections::HashMap;
     /// use tracing::Span;
@@ -51,7 +51,7 @@ pub trait OpenTelemetrySpanExt {
     ///
     /// ```rust
     /// use opentelemetry::{propagation::TextMapPropagator, trace::TraceContextExt};
-    /// use opentelemetry::sdk::propagation::TraceContextPropagator;
+    /// use opentelemetry_sdk::propagation::TraceContextPropagator;
     /// use tracing_opentelemetry::OpenTelemetrySpanExt;
     /// use std::collections::HashMap;
     /// use tracing::Span;

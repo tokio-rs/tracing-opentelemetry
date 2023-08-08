@@ -22,10 +22,11 @@ rust-version = "1.60.0"
 [features]
 default = ["tracing-log", "metrics"]
 # Enables support for exporting OpenTelemetry metrics
-metrics = ["opentelemetry/metrics", "smallvec"]
+metrics = ["opentelemetry/metrics","opentelemetry_sdk/metrics", "smallvec"]
 
 [dependencies]
 opentelemetry = { version = "0.20.0", default-features = false, features = ["trace"] }
+opentelemetry_sdk = { version = "0.20.0", default-features = false, features = ["trace"] }
 tracing = { version = "0.1.35", default-features = false, features = ["std"] }
 tracing-core = "0.1.28"
 tracing-subscriber = { version = "0.3.0", default-features = false, features = ["registry", "std"] }

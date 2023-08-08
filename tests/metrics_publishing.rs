@@ -1,18 +1,17 @@
-use opentelemetry::{
-    metrics::MetricsError,
-    sdk::{
-        metrics::{
-            data::{Histogram, ResourceMetrics, Sum},
-            reader::{
-                AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
-                MetricReader, TemporalitySelector,
-            },
-            InstrumentKind, ManualReader, MeterProvider,
+use opentelemetry::{metrics::MetricsError, Context, KeyValue};
+use opentelemetry_sdk::{
+    metrics::{
+        data,
+        data::{Histogram, Sum},
+        reader::{
+            AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
+            MetricProducer, MetricReader, TemporalitySelector,
         },
-        AttributeSet, Resource,
+        InstrumentKind, ManualReader, MeterProvider,
     },
-    Context, KeyValue,
+    AttributeSet, Resource,
 };
+
 use std::{fmt::Debug, sync::Arc};
 use tracing::Subscriber;
 use tracing_opentelemetry::MetricsLayer;
@@ -425,33 +424,27 @@ struct TestReader {
 }
 
 impl AggregationSelector for TestReader {
-    fn aggregation(&self, kind: InstrumentKind) -> opentelemetry::sdk::metrics::Aggregation {
+    fn aggregation(&self, kind: InstrumentKind) -> opentelemetry_sdk::metrics::Aggregation {
         self.inner.aggregation(kind)
     }
 }
 
 impl TemporalitySelector for TestReader {
-    fn temporality(&self, kind: InstrumentKind) -> opentelemetry::sdk::metrics::data::Temporality {
+    fn temporality(&self, kind: InstrumentKind) -> opentelemetry_sdk::metrics::data::Temporality {
         self.inner.temporality(kind)
     }
 }
 
 impl MetricReader for TestReader {
-    fn register_pipeline(&self, pipeline: std::sync::Weak<opentelemetry::sdk::metrics::Pipeline>) {
+    fn register_pipeline(&self, pipeline: std::sync::Weak<opentelemetry_sdk::metrics::Pipeline>) {
         self.inner.register_pipeline(pipeline);
     }
 
-    fn register_producer(
-        &self,
-        producer: Box<dyn opentelemetry::sdk::metrics::reader::MetricProducer>,
-    ) {
+    fn register_producer(&self, producer: Box<dyn MetricProducer>) {
         self.inner.register_producer(producer);
     }
 
-    fn collect(
-        &self,
-        rm: &mut opentelemetry::sdk::metrics::data::ResourceMetrics,
-    ) -> opentelemetry::metrics::Result<()> {
+    fn collect(&self, rm: &mut data::ResourceMetrics) -> opentelemetry::metrics::Result<()> {
         self.inner.collect(rm)
     }
 
@@ -478,7 +471,7 @@ where
     T: Debug + PartialEq + Copy + std::iter::Sum + 'static,
 {
     fn export(&self) -> Result<(), MetricsError> {
-        let mut rm = ResourceMetrics {
+        let mut rm = data::ResourceMetrics {
             resource: Resource::default(),
             scope_metrics: Vec::new(),
         };
