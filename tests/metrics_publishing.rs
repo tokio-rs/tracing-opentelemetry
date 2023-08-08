@@ -9,9 +9,9 @@ use opentelemetry::{
             },
             InstrumentKind, ManualReader, MeterProvider,
         },
-        Resource,
+        AttributeSet, Resource,
     },
-    Context,
+    Context, KeyValue,
 };
 use std::{fmt::Debug, sync::Arc};
 use tracing::Subscriber;
@@ -23,8 +23,12 @@ const INSTRUMENTATION_LIBRARY_NAME: &str = "tracing/tracing-opentelemetry";
 
 #[tokio::test]
 async fn u64_counter_is_exported() {
-    let (subscriber, exporter) =
-        init_subscriber("hello_world".to_string(), InstrumentKind::Counter, 1_u64);
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Counter,
+        1_u64,
+        None,
+    );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(monotonic_counter.hello_world = 1_u64);
@@ -35,8 +39,12 @@ async fn u64_counter_is_exported() {
 
 #[tokio::test]
 async fn u64_counter_is_exported_i64_at_instrumentation_point() {
-    let (subscriber, exporter) =
-        init_subscriber("hello_world2".to_string(), InstrumentKind::Counter, 1_u64);
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world2".to_string(),
+        InstrumentKind::Counter,
+        1_u64,
+        None,
+    );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(monotonic_counter.hello_world2 = 1_i64);
@@ -51,6 +59,7 @@ async fn f64_counter_is_exported() {
         "float_hello_world".to_string(),
         InstrumentKind::Counter,
         1.000000123_f64,
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -62,8 +71,12 @@ async fn f64_counter_is_exported() {
 
 #[tokio::test]
 async fn i64_up_down_counter_is_exported() {
-    let (subscriber, exporter) =
-        init_subscriber("pebcak".to_string(), InstrumentKind::UpDownCounter, -5_i64);
+    let (subscriber, exporter) = init_subscriber(
+        "pebcak".to_string(),
+        InstrumentKind::UpDownCounter,
+        -5_i64,
+        None,
+    );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(counter.pebcak = -5_i64);
@@ -74,8 +87,12 @@ async fn i64_up_down_counter_is_exported() {
 
 #[tokio::test]
 async fn i64_up_down_counter_is_exported_u64_at_instrumentation_point() {
-    let (subscriber, exporter) =
-        init_subscriber("pebcak2".to_string(), InstrumentKind::UpDownCounter, 5_i64);
+    let (subscriber, exporter) = init_subscriber(
+        "pebcak2".to_string(),
+        InstrumentKind::UpDownCounter,
+        5_i64,
+        None,
+    );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(counter.pebcak2 = 5_u64);
@@ -90,6 +107,7 @@ async fn f64_up_down_counter_is_exported() {
         "pebcak_blah".to_string(),
         InstrumentKind::UpDownCounter,
         99.123_f64,
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -101,8 +119,12 @@ async fn f64_up_down_counter_is_exported() {
 
 #[tokio::test]
 async fn u64_histogram_is_exported() {
-    let (subscriber, exporter) =
-        init_subscriber("abcdefg".to_string(), InstrumentKind::Histogram, 9_u64);
+    let (subscriber, exporter) = init_subscriber(
+        "abcdefg".to_string(),
+        InstrumentKind::Histogram,
+        9_u64,
+        None,
+    );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(histogram.abcdefg = 9_u64);
@@ -117,6 +139,7 @@ async fn i64_histogram_is_exported() {
         "abcdefg_auenatsou".to_string(),
         InstrumentKind::Histogram,
         -19_i64,
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -132,6 +155,7 @@ async fn f64_histogram_is_exported() {
         "abcdefg_racecar".to_string(),
         InstrumentKind::Histogram,
         777.0012_f64,
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -141,10 +165,235 @@ async fn f64_histogram_is_exported() {
     exporter.export().unwrap();
 }
 
+#[tokio::test]
+async fn u64_counter_with_attributes_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Counter,
+        1_u64,
+        Some(AttributeSet::from(
+            [
+                KeyValue::new("u64_key_1", 1_i64),
+                KeyValue::new("i64_key_1", 2_i64),
+                KeyValue::new("f64_key_1", 3_f64),
+                KeyValue::new("str_key_1", "foo"),
+                KeyValue::new("bool_key_1", true),
+            ]
+            .as_slice(),
+        )),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            monotonic_counter.hello_world = 1_u64,
+            u64_key_1 = 1_u64,
+            i64_key_1 = 2_i64,
+            f64_key_1 = 3_f64,
+            str_key_1 = "foo",
+            bool_key_1 = true,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
+#[tokio::test]
+async fn f64_counter_with_attributes_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Counter,
+        1_f64,
+        Some(AttributeSet::from(
+            [
+                KeyValue::new("u64_key_1", 1_i64),
+                KeyValue::new("i64_key_1", 2_i64),
+                KeyValue::new("f64_key_1", 3_f64),
+                KeyValue::new("str_key_1", "foo"),
+                KeyValue::new("bool_key_1", true),
+            ]
+            .as_slice(),
+        )),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            monotonic_counter.hello_world = 1_f64,
+            u64_key_1 = 1_u64,
+            i64_key_1 = 2_i64,
+            f64_key_1 = 3_f64,
+            str_key_1 = "foo",
+            bool_key_1 = true,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
+#[tokio::test]
+async fn i64_up_down_counter_with_attributes_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::UpDownCounter,
+        -1_i64,
+        Some(AttributeSet::from(
+            [
+                KeyValue::new("u64_key_1", 1_i64),
+                KeyValue::new("i64_key_1", 2_i64),
+                KeyValue::new("f64_key_1", 3_f64),
+                KeyValue::new("str_key_1", "foo"),
+                KeyValue::new("bool_key_1", true),
+            ]
+            .as_slice(),
+        )),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            counter.hello_world = -1_i64,
+            u64_key_1 = 1_u64,
+            i64_key_1 = 2_i64,
+            f64_key_1 = 3_f64,
+            str_key_1 = "foo",
+            bool_key_1 = true,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
+#[tokio::test]
+async fn f64_up_down_counter_with_attributes_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::UpDownCounter,
+        -1_f64,
+        Some(AttributeSet::from(
+            [
+                KeyValue::new("u64_key_1", 1_i64),
+                KeyValue::new("i64_key_1", 2_i64),
+                KeyValue::new("f64_key_1", 3_f64),
+                KeyValue::new("str_key_1", "foo"),
+                KeyValue::new("bool_key_1", true),
+            ]
+            .as_slice(),
+        )),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            counter.hello_world = -1_f64,
+            u64_key_1 = 1_u64,
+            i64_key_1 = 2_i64,
+            f64_key_1 = 3_f64,
+            str_key_1 = "foo",
+            bool_key_1 = true,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
+#[tokio::test]
+async fn u64_histogram_with_attributes_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Histogram,
+        1_u64,
+        Some(AttributeSet::from(
+            [
+                KeyValue::new("u64_key_1", 1_i64),
+                KeyValue::new("i64_key_1", 2_i64),
+                KeyValue::new("f64_key_1", 3_f64),
+                KeyValue::new("str_key_1", "foo"),
+                KeyValue::new("bool_key_1", true),
+            ]
+            .as_slice(),
+        )),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            histogram.hello_world = 1_u64,
+            u64_key_1 = 1_u64,
+            i64_key_1 = 2_i64,
+            f64_key_1 = 3_f64,
+            str_key_1 = "foo",
+            bool_key_1 = true,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
+#[tokio::test]
+async fn i64_histogram_with_attributes_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Histogram,
+        -1_i64,
+        Some(AttributeSet::from(
+            [
+                KeyValue::new("u64_key_1", 1_i64),
+                KeyValue::new("i64_key_1", 2_i64),
+                KeyValue::new("f64_key_1", 3_f64),
+                KeyValue::new("str_key_1", "foo"),
+                KeyValue::new("bool_key_1", true),
+            ]
+            .as_slice(),
+        )),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            histogram.hello_world = -1_i64,
+            u64_key_1 = 1_u64,
+            i64_key_1 = 2_i64,
+            f64_key_1 = 3_f64,
+            str_key_1 = "foo",
+            bool_key_1 = true,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
+#[tokio::test]
+async fn f64_histogram_with_attributes_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Histogram,
+        1_f64,
+        Some(AttributeSet::from(
+            [
+                KeyValue::new("u64_key_1", 1_i64),
+                KeyValue::new("i64_key_1", 2_i64),
+                KeyValue::new("f64_key_1", 3_f64),
+                KeyValue::new("str_key_1", "foo"),
+                KeyValue::new("bool_key_1", true),
+            ]
+            .as_slice(),
+        )),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            histogram.hello_world = 1_f64,
+            u64_key_1 = 1_u64,
+            i64_key_1 = 2_i64,
+            f64_key_1 = 3_f64,
+            str_key_1 = "foo",
+            bool_key_1 = true,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
 fn init_subscriber<T>(
     expected_metric_name: String,
     expected_instrument_kind: InstrumentKind,
     expected_value: T,
+    expected_attributes: Option<AttributeSet>,
 ) -> (impl Subscriber + 'static, TestExporter<T>) {
     let reader = ManualReader::builder()
         .with_aggregation_selector(Box::new(DefaultAggregationSelector::new()))
@@ -159,6 +408,7 @@ fn init_subscriber<T>(
         expected_metric_name,
         expected_instrument_kind,
         expected_value,
+        expected_attributes,
         reader,
         _meter_provider: provider.clone(),
     };
@@ -218,6 +468,7 @@ struct TestExporter<T> {
     expected_metric_name: String,
     expected_instrument_kind: InstrumentKind,
     expected_value: T,
+    expected_attributes: Option<AttributeSet>,
     reader: TestReader,
     _meter_provider: MeterProvider,
 }
@@ -255,6 +506,12 @@ where
                                 .map(|data_point| data_point.value)
                                 .sum()
                         );
+
+                        if let Some(expected_attributes) = self.expected_attributes.as_ref() {
+                            sum.data_points.iter().for_each(|data_point| {
+                                assert_eq!(expected_attributes, &data_point.attributes,)
+                            });
+                        }
                     }
                     InstrumentKind::Histogram => {
                         let histogram =
@@ -262,6 +519,10 @@ where
                         let histogram_data = histogram.data_points.first().unwrap();
                         assert!(histogram_data.count > 0);
                         assert_eq!(histogram_data.sum, self.expected_value);
+
+                        if let Some(expected_attributes) = self.expected_attributes.as_ref() {
+                            assert_eq!(expected_attributes, &histogram_data.attributes);
+                        }
                     }
                     unexpected => {
                         panic!("InstrumentKind {:?} not currently supported!", unexpected)
