@@ -59,14 +59,18 @@ The crate provides the following types:
 ### Basic Usage
 
 ```rust
-use opentelemetry::sdk::export::trace::stdout;
+use opentelemetry::sdk::trace::TracerProvider;
+use opentelemetry::trace::TracerProvider as _;
 use tracing::{error, span};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
 
 fn main() {
-    // Install a new OpenTelemetry trace pipeline
-    let tracer = stdout::new_pipeline().install_simple();
+    // Create a new OpenTelemetry trace pipeline that prints to stdout
+    let provider = TracerProvider::builder()
+        .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
+        .build();
+    let tracer = provider.tracer("readme_example");
 
     // Create a tracing layer with the configured tracer
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
@@ -84,6 +88,16 @@ fn main() {
         error!("This event will be logged in the root span.");
     });
 }
+```
+
+`Cargo.toml`
+```toml
+[dependencies]
+opentelemetry = "0.20"
+opentelemetry-stdout = { version = "0.1.0", features = ["trace"] }
+tracing = "0.1"
+tracing-opentelemetry = "0.20"
+tracing-subscriber = "0.3"
 ```
 
 ### Visualization example
