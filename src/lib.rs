@@ -27,7 +27,7 @@
 //! * `otel.status_message`: Set the span status message.
 //!
 //! [span kinds]: opentelemetry::trace::SpanKind
-//! [span status codes]: opentelemetry::trace::StatusCode
+//! [span status codes]: opentelemetry::trace::Status
 //!
 //! ### Semantic Conventions
 //!
