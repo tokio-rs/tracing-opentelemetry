@@ -51,7 +51,7 @@
 //! ## Examples
 //!
 //! ```
-//! use opentelemetry::sdk::trace::TracerProvider;
+//! use opentelemetry_sdk::trace::TracerProvider;
 //! use opentelemetry::trace::{Tracer, TracerProvider as _};
 //! use tracing::{error, span};
 //! use tracing_subscriber::layer::SubscriberExt;

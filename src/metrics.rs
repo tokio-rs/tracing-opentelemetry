@@ -230,7 +230,7 @@ impl<'a> Visit for MetricVisitor<'a> {
 /// use tracing_opentelemetry::MetricsLayer;
 /// use tracing_subscriber::layer::SubscriberExt;
 /// use tracing_subscriber::Registry;
-/// # use opentelemetry::sdk::metrics::MeterProvider;
+/// # use opentelemetry_sdk::metrics::MeterProvider;
 ///
 /// // Constructing a MeterProvider is out-of-scope for the docs here, but there
 /// // are examples in the opentelemetry repository. See:

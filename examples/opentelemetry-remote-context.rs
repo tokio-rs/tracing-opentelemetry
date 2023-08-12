@@ -1,5 +1,5 @@
-use opentelemetry::sdk::propagation::TraceContextPropagator;
 use opentelemetry::{global, Context};
+use opentelemetry_sdk::propagation::TraceContextPropagator;
 use std::collections::HashMap;
 use tracing::span;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
