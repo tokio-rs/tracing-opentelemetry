@@ -306,6 +306,19 @@ impl<'a> Visit for MetricVisitor<'a> {
 /// info!(counter.baz = (i64::MAX as u64) + 1)
 /// ```
 ///
+/// # Attributes
+///
+/// When `MetricsLayer` outputs metrics, it converts key-value pairs into [Attributes] and associates them with metrics.
+///
+/// [Attributes]: https://opentelemetry.io/docs/specs/otel/common/#attribute
+///
+/// For example:
+/// ```
+/// # use tracing::info;
+/// // adds attributes bar="baz" and qux=2 to the `foo` counter.
+/// info!(monotonic_counter.foo = 1, bar = "baz", qux = 2);
+/// ```      
+///
 /// # Implementation Details
 ///
 /// `MetricsLayer` holds a set of maps, with each map corresponding to a
