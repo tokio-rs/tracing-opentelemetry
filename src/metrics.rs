@@ -247,8 +247,7 @@ impl<'a> Visit for MetricVisitor<'a> {
 /// - `monotonic_counter.` (non-negative numbers): Used when the counter should
 ///   only ever increase
 /// - `counter.`: Used when the counter can go up or down
-/// - `value.`: Used for discrete data points (i.e., summing them does not make
-///   semantic sense)
+/// - `histogram.`: Used to report arbitrary values that are likely to be statistically meaningful
 ///
 /// Examples:
 /// ```
@@ -260,9 +259,9 @@ impl<'a> Visit for MetricVisitor<'a> {
 /// info!(counter.baz = -1);
 /// info!(counter.xyz = 1.1);
 ///
-/// info!(value.qux = 1);
-/// info!(value.abc = -1);
-/// info!(value.def = 1.1);
+/// info!(histogram.qux = 1);
+/// info!(histogram.abc = -1);
+/// info!(histogram.def = 1.1);
 /// ```
 ///
 /// # Mixing data types
