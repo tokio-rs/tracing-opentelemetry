@@ -27,7 +27,7 @@
 //! * `otel.status_message`: Set the span status message.
 //!
 //! [span kinds]: opentelemetry::trace::SpanKind
-//! [span status codes]: opentelemetry::trace::StatusCode
+//! [span status codes]: opentelemetry::trace::Status
 //!
 //! ### Semantic Conventions
 //!
@@ -82,10 +82,12 @@
 //!
 //! ## Feature Flags
 //!
-//! - `metrics`: Enables the [`MetricsSubscriber`] type, a [subscriber] that
+//! - `metrics`: Enables the [`MetricsLayer`] type, a [layer] that
 //!   exports OpenTelemetry metrics from specifically-named events. This enables
 //!   the `metrics` feature flag on the `opentelemetry` crate.  *Enabled by
 //!   default*.
+//!
+//! [layer]: tracing_subscriber::layer
 //!
 //! ## Supported Rust Versions
 //!
