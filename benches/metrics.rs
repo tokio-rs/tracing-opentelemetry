@@ -1,5 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use opentelemetry::metrics::noop::NoopMeterProvider;
+#[cfg(not(target_os = "windows"))]
+use pprof::criterion::{Output, PProfProfiler};
 use tracing_opentelemetry::MetricsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -154,6 +156,13 @@ fn metrics_events(c: &mut Criterion) {
     group.finish();
 }
 
+#[cfg(not(target_os = "windows"))]
+criterion_group! {
+    name = benches;
+    config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    targets = metrics_events
+}
+#[cfg(target_os = "windows")]
 criterion_group! {
     name = benches;
     config = Criterion::default();
