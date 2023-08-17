@@ -490,7 +490,7 @@ where
     ///
     /// By default, these attributes are not recorded.
     ///
-    /// [conv]: https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/exceptions/
+    /// [conv]: https://github.com/open-telemetry/semantic-conventions/tree/main/docs/exceptions/
     pub fn with_exception_fields(self, exception_fields: bool) -> Self {
         Self {
             exception_config: ExceptionFieldConfig {
@@ -513,7 +513,7 @@ where
     ///
     /// By default, these attributes are not propagated to the span.
     ///
-    /// [conv]: https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/exceptions/
+    /// [conv]: https://github.com/open-telemetry/semantic-conventions/tree/main/docs/exceptions/
     pub fn with_exception_field_propagation(self, exception_field_propagation: bool) -> Self {
         Self {
             exception_config: ExceptionFieldConfig {
@@ -532,7 +532,7 @@ where
     ///
     /// By default, locations are enabled.
     ///
-    /// [conv]: https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/#source-code-attributes
+    /// [conv]: https://github.com/open-telemetry/semantic-conventions/blob/main/docs/general/attributes.md#source-code-attributes/
     pub fn with_location(self, location: bool) -> Self {
         Self { location, ..self }
     }
@@ -545,7 +545,7 @@ where
     ///
     /// By default, locations are enabled.
     ///
-    /// [conv]: https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/#source-code-attributes
+    /// [conv]: https://github.com/open-telemetry/semantic-conventions/blob/main/docs/general/attributes.md#source-code-attributes/
     #[deprecated(
         since = "0.17.3",
         note = "renamed to `OpenTelemetrySubscriber::with_location`"
@@ -573,7 +573,7 @@ where
     ///
     /// By default, thread attributes are enabled.
     ///
-    /// [conv]: https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/#general-thread-attributes
+    /// [conv]: https://github.com/open-telemetry/semantic-conventions/blob/main/docs/general/attributes.md#general-thread-attributes/
     pub fn with_threads(self, threads: bool) -> Self {
         Self {
             with_threads: threads,
