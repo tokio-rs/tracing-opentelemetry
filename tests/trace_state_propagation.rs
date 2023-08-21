@@ -64,6 +64,24 @@ fn trace_root_with_children() {
 }
 
 #[test]
+fn propagate_invalid_context() {
+    let (_tracer, provider, exporter, subscriber) = test_tracer();
+    let propagator = TraceContextPropagator::new();
+    let invalid_cx = propagator.extract(&HashMap::new()); // empty context extracted
+
+    tracing::subscriber::with_default(subscriber, || {
+        let root = tracing::debug_span!("root");
+        root.set_parent(invalid_cx);
+        root.in_scope(|| tracing::debug_span!("child"));
+    });
+
+    drop(provider); // flush all spans
+    let spans = exporter.0.lock().unwrap();
+    assert_eq!(spans.len(), 2);
+    assert_shared_attrs_eq(&spans[0].span_context, &spans[1].span_context);
+}
+
+#[test]
 fn inject_context_into_outgoing_requests() {
     let (_tracer, _provider, _exporter, subscriber) = test_tracer();
     let propagator = test_propagator();
