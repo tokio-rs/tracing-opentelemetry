@@ -1,3 +1,19 @@
+# 0.21.0 (August 1, 2023)
+
+### Added
+
+- Ability to produce measurement with attributes (#43)
+
+### Changed
+
+- Depend on `opentelemetry_sdk` directly instead of `opentelemetry::sdk` (#48)
+
+### Fixed
+
+- Trace IDs not matching when propagating invalid contexts (#55)
+
+Thanks to @ymgyt and @hdost for contributing to this release!
+
 # 0.20.0 (August 1, 2023)
 
 ### Added
