@@ -6,7 +6,6 @@
 
 ### Breaking Changes
 
-- Depend on `opentelemetry_sdk` directly instead of `opentelemetry::sdk` (#48)
 - `MetricsLayer` is now generic over the its `Subscriber` impl to support
   [per-layer filtering] (#43)
 
