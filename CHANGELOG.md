@@ -1,3 +1,22 @@
+# 0.21.0 (August 28, 2023)
+
+### Added
+
+- Ability to produce measurement with attributes (#43)
+
+### Breaking Changes
+
+- `MetricsLayer` is now generic over the its `Subscriber` impl to support
+  [per-layer filtering] (#43)
+
+### Fixed
+
+- Trace IDs not matching when propagating invalid contexts (#55)
+
+Thanks to @ymgyt and @hdost for contributing to this release!
+
+[per-layer filtering]: https://docs.rs/tracing-subscriber/0.3.17/tracing_subscriber/layer/index.html#per-layer-filtering
+
 # 0.20.0 (August 1, 2023)
 
 ### Added
