@@ -8,7 +8,8 @@ use std::any::TypeId;
 use std::fmt;
 use std::marker;
 use std::thread;
-use std::time::{Instant, SystemTime};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
 use tracing_core::span::{self, Attributes, Id, Record};
 use tracing_core::{field, Event, Subscriber};
 #[cfg(feature = "tracing-log")]
@@ -16,6 +17,8 @@ use tracing_log::NormalizeEvent;
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::Layer;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 const SPAN_NAME_FIELD: &str = "otel.name";
 const SPAN_KIND_FIELD: &str = "otel.kind";
@@ -680,7 +683,7 @@ where
         let mut builder = self
             .tracer
             .span_builder(attrs.metadata().name())
-            .with_start_time(SystemTime::now())
+            .with_start_time(crate::time::now())
             // Eagerly assign span id so children have stable parent id
             .with_span_id(self.tracer.new_span_id());
 
@@ -839,7 +842,7 @@ where
 
             let mut otel_event = otel::Event::new(
                 String::new(),
-                SystemTime::now(),
+                crate::time::now(),
                 vec![Key::new("level").string(meta.level().as_str()), target],
                 0,
             );
@@ -924,7 +927,7 @@ where
 
             // Assign end time, build and start span, drop span to export
             builder
-                .with_end_time(SystemTime::now())
+                .with_end_time(crate::time::now())
                 .start_with_context(&self.tracer, &parent_cx);
         }
     }

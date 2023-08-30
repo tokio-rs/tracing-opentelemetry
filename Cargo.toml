@@ -56,6 +56,10 @@ tracing-subscriber = { version = "0.3.0", default-features = false, features = [
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 pprof = { version = "0.11.1", features = ["flamegraph", "criterion"] }
 
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
+js-sys = "0.3.64"
+web-time = "0.2.0"
+
 [lib]
 bench = false
 
