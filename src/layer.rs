@@ -835,10 +835,9 @@ where
             #[cfg(not(feature = "tracing-log"))]
             let target = target.string(meta.target());
 
-            let mut extensions = span.extensions_mut();
-            let span_builder = extensions
-                .get_mut::<OtelData>()
-                .map(|data| &mut data.builder);
+            // Move out extension data to not hold the extensions lock across the event.record() call, which could result in a deadlock
+            let mut otel_data = span.extensions_mut().remove::<OtelData>();
+            let span_builder = otel_data.as_mut().map(|data| &mut data.builder);
 
             let mut otel_event = otel::Event::new(
                 String::new(),
@@ -852,7 +851,9 @@ where
                 exception_config: self.exception_config,
             });
 
-            if let Some(OtelData { builder, .. }) = extensions.get_mut::<OtelData>() {
+            if let Some(mut otel_data) = otel_data {
+                let builder = &mut otel_data.builder;
+
                 if builder.status == otel::Status::Unset
                     && *meta.level() == tracing_core::Level::ERROR
                 {
@@ -895,6 +896,8 @@ where
                 } else {
                     builder.events = Some(vec![otel_event]);
                 }
+
+                span.extensions_mut().replace(otel_data);
             }
         };
     }
