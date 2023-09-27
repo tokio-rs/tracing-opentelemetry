@@ -95,6 +95,7 @@ fn main() {
 ```toml
 [dependencies]
 opentelemetry = "0.20"
+opentelemetry_sdk = "0.20"
 opentelemetry-stdout = { version = "0.1.0", features = ["trace"] }
 tracing = "0.1"
 tracing-opentelemetry = "0.21"
