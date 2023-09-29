@@ -25,6 +25,7 @@ const SPAN_KIND_FIELD: &str = "otel.kind";
 const SPAN_STATUS_CODE_FIELD: &str = "otel.status_code";
 const SPAN_STATUS_MESSAGE_FIELD: &str = "otel.status_message";
 
+const EVENT_EXCEPTION_NAME: &str = "exception";
 const FIELD_EXCEPTION_MESSAGE: &str = "exception.message";
 const FIELD_EXCEPTION_STACKTRACE: &str = "exception.stacktrace";
 
@@ -38,7 +39,7 @@ pub struct OpenTelemetryLayer<S, T> {
     location: bool,
     tracked_inactivity: bool,
     with_threads: bool,
-    exception_config: ExceptionFieldConfig,
+    sem_conv_config: SemConvConfig,
     get_context: WithContext,
     _registry: marker::PhantomData<S>,
 }
@@ -119,7 +120,7 @@ fn str_to_status(s: &str) -> otel::Status {
 struct SpanEventVisitor<'a, 'b> {
     event_builder: &'a mut otel::Event,
     span_builder: Option<&'b mut otel::SpanBuilder>,
-    exception_config: ExceptionFieldConfig,
+    sem_conv_config: SemConvConfig,
 }
 
 impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
@@ -180,6 +181,27 @@ impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
     fn record_str(&mut self, field: &field::Field, value: &str) {
         match field.name() {
             "message" => self.event_builder.name = value.to_string().into(),
+            // While tracing supports the error primitive, the instrumentation macro does not
+            // use the primitive and instead uses the debug or display primitive.
+            // In both cases, an event with an empty name and with an error attribute is created.
+            "error" if self.event_builder.name.is_empty() => {
+                if self.sem_conv_config.error_events_to_status {
+                    if let Some(span) = &mut self.span_builder {
+                        span.status = otel::Status::error(format!("{:?}", value));
+                    }
+                }
+                if self.sem_conv_config.error_events_to_exceptions {
+                    self.event_builder.name = EVENT_EXCEPTION_NAME.into();
+                    self.event_builder.attributes.push(KeyValue::new(
+                        FIELD_EXCEPTION_MESSAGE,
+                        format!("{:?}", value),
+                    ));
+                } else {
+                    self.event_builder
+                        .attributes
+                        .push(KeyValue::new("error", format!("{:?}", value)));
+                }
+            }
             // Skip fields that are actually log metadata that have already been handled
             #[cfg(feature = "tracing-log")]
             name if name.starts_with("log.") => (),
@@ -198,6 +220,27 @@ impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
     fn record_debug(&mut self, field: &field::Field, value: &dyn fmt::Debug) {
         match field.name() {
             "message" => self.event_builder.name = format!("{:?}", value).into(),
+            // While tracing supports the error primitive, the instrumentation macro does not
+            // use the primitive and instead uses the debug or display primitive.
+            // In both cases, an event with an empty name and with an error attribute is created.
+            "error" if self.event_builder.name.is_empty() => {
+                if self.sem_conv_config.error_events_to_status {
+                    if let Some(span) = &mut self.span_builder {
+                        span.status = otel::Status::error(format!("{:?}", value));
+                    }
+                }
+                if self.sem_conv_config.error_events_to_exceptions {
+                    self.event_builder.name = EVENT_EXCEPTION_NAME.into();
+                    self.event_builder.attributes.push(KeyValue::new(
+                        FIELD_EXCEPTION_MESSAGE,
+                        format!("{:?}", value),
+                    ));
+                } else {
+                    self.event_builder
+                        .attributes
+                        .push(KeyValue::new("error", format!("{:?}", value)));
+                }
+            }
             // Skip fields that are actually log metadata that have already been handled
             #[cfg(feature = "tracing-log")]
             name if name.starts_with("log.") => (),
@@ -228,7 +271,7 @@ impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
 
         let error_msg = value.to_string();
 
-        if self.exception_config.record {
+        if self.sem_conv_config.error_fields_to_exceptions {
             self.event_builder
                 .attributes
                 .push(Key::new(FIELD_EXCEPTION_MESSAGE).string(error_msg.clone()));
@@ -244,7 +287,7 @@ impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
                 .push(Key::new(FIELD_EXCEPTION_STACKTRACE).array(chain.clone()));
         }
 
-        if self.exception_config.propagate {
+        if self.sem_conv_config.error_records_to_exceptions {
             if let Some(span) = &mut self.span_builder {
                 if let Some(attrs) = span.attributes.as_mut() {
                     attrs.insert(
@@ -275,21 +318,44 @@ impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
     }
 }
 
-/// Control over opentelemetry conventional exception fields
+/// Control over the mapping between tracing fields/events and OpenTelemetry conventional status/exception fields
 #[derive(Clone, Copy)]
-struct ExceptionFieldConfig {
+struct SemConvConfig {
     /// If an error value is recorded on an event/span, should the otel fields
     /// be added
-    record: bool,
+    ///
+    /// Note that this uses tracings `record_error` which is only implemented for `(dyn Error + 'static)`.
+    error_fields_to_exceptions: bool,
 
     /// If an error value is recorded on an event, should the otel fields be
     /// added to the corresponding span
-    propagate: bool,
+    ///
+    /// Note that this uses tracings `record_error` which is only implemented for `(dyn Error + 'static)`.
+    error_records_to_exceptions: bool,
+
+    /// If a function is instrumented and returns a `Result`, should the error
+    /// value be propagated to the span status.
+    ///
+    /// Without this enabled, the span status will be "Error" with an empty description
+    /// when at least one error event is recorded in the span.
+    ///
+    /// Note: the instrument macro will emit an error event if the function returns the `Err` variant.
+    /// This is not affected by this setting. Disabling this will only affect the span status.
+    error_events_to_status: bool,
+
+    /// If an event with an empty name and a field named `error` is recorded,
+    /// should the event be rewritten to have the name `exception` and the field `exception.message`
+    ///
+    /// Follows the semantic conventions for exceptions.
+    ///
+    /// Note: the instrument macro will emit an error event if the function returns the `Err` variant.
+    /// This is not affected by this setting. Disabling this will only affect the created fields on the OTel span.
+    error_events_to_exceptions: bool,
 }
 
 struct SpanAttributeVisitor<'a> {
     span_builder: &'a mut otel::SpanBuilder,
-    exception_config: ExceptionFieldConfig,
+    sem_conv_config: SemConvConfig,
 }
 
 impl<'a> SpanAttributeVisitor<'a> {
@@ -377,7 +443,7 @@ impl<'a> field::Visit for SpanAttributeVisitor<'a> {
 
         let error_msg = value.to_string();
 
-        if self.exception_config.record {
+        if self.sem_conv_config.error_fields_to_exceptions {
             self.record(Key::new(FIELD_EXCEPTION_MESSAGE).string(error_msg.clone()));
 
             // NOTE: This is actually not the stacktrace of the exception. This is
@@ -432,10 +498,13 @@ where
             location: true,
             tracked_inactivity: true,
             with_threads: true,
-            exception_config: ExceptionFieldConfig {
-                record: false,
-                propagate: false,
+            sem_conv_config: SemConvConfig {
+                error_fields_to_exceptions: true,
+                error_records_to_exceptions: true,
+                error_events_to_exceptions: true,
+                error_events_to_status: true,
             },
+
             get_context: WithContext(Self::get_context),
             _registry: marker::PhantomData,
         }
@@ -476,7 +545,7 @@ where
             location: self.location,
             tracked_inactivity: self.tracked_inactivity,
             with_threads: self.with_threads,
-            exception_config: self.exception_config,
+            sem_conv_config: self.sem_conv_config,
             get_context: WithContext(OpenTelemetryLayer::<S, Tracer>::get_context),
             _registry: self._registry,
         }
@@ -491,14 +560,81 @@ where
     /// These attributes follow the [OpenTelemetry semantic conventions for
     /// exceptions][conv].
     ///
-    /// By default, these attributes are not recorded.
+    /// By default, these attributes are recorded.
+    /// Note that this only works for `(dyn Error + 'static)`.
+    /// See [Implementations on Foreign Types of tracing::Value][impls] or [`OpenTelemetryLayer::with_error_events_to_exceptions`]
     ///
     /// [conv]: https://github.com/open-telemetry/semantic-conventions/tree/main/docs/exceptions/
+    /// [impls]: https://docs.rs/tracing/0.1.37/tracing/trait.Value.html#foreign-impls
+    #[deprecated(
+        since = "0.21.0",
+        note = "renamed to `OpenTelemetryLayer::with_error_fields_to_exceptions`"
+    )]
     pub fn with_exception_fields(self, exception_fields: bool) -> Self {
         Self {
-            exception_config: ExceptionFieldConfig {
-                record: exception_fields,
-                ..self.exception_config
+            sem_conv_config: SemConvConfig {
+                error_fields_to_exceptions: exception_fields,
+                ..self.sem_conv_config
+            },
+            ..self
+        }
+    }
+
+    /// Sets whether or not span and event metadata should include OpenTelemetry
+    /// exception fields such as `exception.message` and `exception.backtrace`
+    /// when an `Error` value is recorded. If multiple error values are recorded
+    /// on the same span/event, only the most recently recorded error value will
+    /// show up under these fields.
+    ///
+    /// These attributes follow the [OpenTelemetry semantic conventions for
+    /// exceptions][conv].
+    ///
+    /// By default, these attributes are recorded.
+    /// Note that this only works for `(dyn Error + 'static)`.
+    /// See [Implementations on Foreign Types of tracing::Value][impls] or [`OpenTelemetryLayer::with_error_events_to_exceptions`]
+    ///
+    /// [conv]: https://github.com/open-telemetry/semantic-conventions/tree/main/docs/exceptions/
+    /// [impls]: https://docs.rs/tracing/0.1.37/tracing/trait.Value.html#foreign-impls
+    pub fn with_error_fields_to_exceptions(self, error_fields_to_exceptions: bool) -> Self {
+        Self {
+            sem_conv_config: SemConvConfig {
+                error_fields_to_exceptions,
+                ..self.sem_conv_config
+            },
+            ..self
+        }
+    }
+
+    /// Sets whether or not an event considered for exception mapping (see [`OpenTelemetryLayer::with_error_recording`])
+    /// should be propagated to the span status error description.
+    ///
+    ///
+    /// By default, these events do set the span status error description.
+    pub fn with_error_events_to_status(self, error_events_to_status: bool) -> Self {
+        Self {
+            sem_conv_config: SemConvConfig {
+                error_events_to_status,
+                ..self.sem_conv_config
+            },
+            ..self
+        }
+    }
+
+    /// Sets whether or not a subset of events following the described schema are mapped to
+    /// events following the [OpenTelemetry semantic conventions for
+    /// exceptions][conv].
+    ///
+    /// * Only events without a message field (unnamed events) and at least one field with the name error
+    /// are considered for mapping.
+    ///
+    /// By default, these events are mapped.
+    ///
+    /// [conv]: https://github.com/open-telemetry/semantic-conventions/tree/main/docs/exceptions/
+    pub fn with_error_events_to_exceptions(self, error_events_to_exceptions: bool) -> Self {
+        Self {
+            sem_conv_config: SemConvConfig {
+                error_events_to_exceptions,
+                ..self.sem_conv_config
             },
             ..self
         }
@@ -514,14 +650,45 @@ where
     /// These attributes follow the [OpenTelemetry semantic conventions for
     /// exceptions][conv].
     ///
-    /// By default, these attributes are not propagated to the span.
+    /// By default, these attributes are propagated to the span. Note that this only works for `(dyn Error + 'static)`.
+    /// See [Implementations on Foreign Types of tracing::Value][impls] or [`OpenTelemetryLayer::with_error_events_to_exceptions`]
     ///
     /// [conv]: https://github.com/open-telemetry/semantic-conventions/tree/main/docs/exceptions/
+    /// [impls]: https://docs.rs/tracing/0.1.37/tracing/trait.Value.html#foreign-impls
+    #[deprecated(
+        since = "0.21.0",
+        note = "renamed to `OpenTelemetryLayer::with_error_records_to_exceptions`"
+    )]
     pub fn with_exception_field_propagation(self, exception_field_propagation: bool) -> Self {
         Self {
-            exception_config: ExceptionFieldConfig {
-                propagate: exception_field_propagation,
-                ..self.exception_config
+            sem_conv_config: SemConvConfig {
+                error_records_to_exceptions: exception_field_propagation,
+                ..self.sem_conv_config
+            },
+            ..self
+        }
+    }
+
+    /// Sets whether or not reporting an `Error` value on an event will
+    /// propagate the OpenTelemetry exception fields such as `exception.message`
+    /// and `exception.backtrace` to the corresponding span. You do not need to
+    /// enable `with_exception_fields` in order to enable this. If multiple
+    /// error values are recorded on the same span/event, only the most recently
+    /// recorded error value will show up under these fields.
+    ///
+    /// These attributes follow the [OpenTelemetry semantic conventions for
+    /// exceptions][conv].
+    ///
+    /// By default, these attributes are propagated to the span. Note that this only works for `(dyn Error + 'static)`.
+    /// See [Implementations on Foreign Types of tracing::Value][impls] or [`OpenTelemetryLayer::with_error_events_to_exceptions`]
+    ///
+    /// [conv]: https://github.com/open-telemetry/semantic-conventions/tree/main/docs/exceptions/
+    /// [impls]: https://docs.rs/tracing/0.1.37/tracing/trait.Value.html#foreign-impls
+    pub fn with_error_records_to_exceptions(self, error_records_to_exceptions: bool) -> Self {
+        Self {
+            sem_conv_config: SemConvConfig {
+                error_records_to_exceptions,
+                ..self.sem_conv_config
             },
             ..self
         }
@@ -725,7 +892,7 @@ where
 
         attrs.record(&mut SpanAttributeVisitor {
             span_builder: &mut builder,
-            exception_config: self.exception_config,
+            sem_conv_config: self.sem_conv_config,
         });
         extensions.insert(OtelData { builder, parent_cx });
     }
@@ -769,7 +936,7 @@ where
         if let Some(data) = extensions.get_mut::<OtelData>() {
             values.record(&mut SpanAttributeVisitor {
                 span_builder: &mut data.builder,
-                exception_config: self.exception_config,
+                sem_conv_config: self.sem_conv_config,
             });
         }
     }
@@ -845,10 +1012,11 @@ where
                 vec![Key::new("level").string(meta.level().as_str()), target],
                 0,
             );
+
             event.record(&mut SpanEventVisitor {
                 event_builder: &mut otel_event,
                 span_builder,
-                exception_config: self.exception_config,
+                sem_conv_config: self.sem_conv_config,
             });
 
             if let Some(mut otel_data) = otel_data {
@@ -1210,10 +1378,68 @@ mod tests {
     #[test]
     fn records_error_fields() {
         let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+
+        let err = TestDynError::new("base error")
+            .with_parent("intermediate error")
+            .with_parent("user error");
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug_span!(
+                "request",
+                error = &err as &(dyn std::error::Error + 'static)
+            );
+        });
+
+        let attributes = tracer
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .builder
+            .attributes
+            .as_ref()
+            .unwrap()
+            .clone();
+
+        let key_values = attributes
+            .into_iter()
+            .map(|(key, value)| (key.as_str().to_owned(), value))
+            .collect::<HashMap<_, _>>();
+
+        assert_eq!(key_values["error"].as_str(), "user error");
+        assert_eq!(
+            key_values["error.chain"],
+            Value::Array(
+                vec![
+                    StringValue::from("intermediate error"),
+                    StringValue::from("base error")
+                ]
+                .into()
+            )
+        );
+
+        assert_eq!(key_values[FIELD_EXCEPTION_MESSAGE].as_str(), "user error");
+        assert_eq!(
+            key_values[FIELD_EXCEPTION_STACKTRACE],
+            Value::Array(
+                vec![
+                    StringValue::from("intermediate error"),
+                    StringValue::from("base error")
+                ]
+                .into()
+            )
+        );
+    }
+
+    #[test]
+    fn records_no_error_fields() {
+        let tracer = TestTracer(Arc::new(Mutex::new(None)));
         let subscriber = tracing_subscriber::registry().with(
             layer()
-                .with_tracer(tracer.clone())
-                .with_exception_fields(true),
+                .with_error_records_to_exceptions(false)
+                .with_tracer(tracer.clone()),
         );
 
         let err = TestDynError::new("base error")
@@ -1356,10 +1582,58 @@ mod tests {
     #[test]
     fn propagates_error_fields_from_event_to_span() {
         let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+
+        let err = TestDynError::new("base error")
+            .with_parent("intermediate error")
+            .with_parent("user error");
+
+        tracing::subscriber::with_default(subscriber, || {
+            let _guard = tracing::debug_span!("request",).entered();
+
+            tracing::error!(
+                error = &err as &(dyn std::error::Error + 'static),
+                "request error!"
+            )
+        });
+
+        let attributes = tracer
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .builder
+            .attributes
+            .as_ref()
+            .unwrap()
+            .clone();
+
+        let key_values = attributes
+            .into_iter()
+            .map(|(key, value)| (key.as_str().to_owned(), value))
+            .collect::<HashMap<_, _>>();
+
+        assert_eq!(key_values[FIELD_EXCEPTION_MESSAGE].as_str(), "user error");
+        assert_eq!(
+            key_values[FIELD_EXCEPTION_STACKTRACE],
+            Value::Array(
+                vec![
+                    StringValue::from("intermediate error"),
+                    StringValue::from("base error")
+                ]
+                .into()
+            )
+        );
+    }
+
+    #[test]
+    fn propagates_no_error_fields_from_event_to_span() {
+        let tracer = TestTracer(Arc::new(Mutex::new(None)));
         let subscriber = tracing_subscriber::registry().with(
             layer()
-                .with_tracer(tracer.clone())
-                .with_exception_field_propagation(true),
+                .with_error_fields_to_exceptions(false)
+                .with_tracer(tracer.clone()),
         );
 
         let err = TestDynError::new("base error")
