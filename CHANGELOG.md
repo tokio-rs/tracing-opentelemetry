@@ -1,11 +1,18 @@
-# Unreleased
+# 0.22.0 (November 7, 2023)
 
 ### Breaking Changes
 
 - Upgrade to `v0.21.0` of `opentelemetry`
   For list of breaking changes in OpenTelemetry, see the
   [v0.21.0 changelog](https://github.com/open-telemetry/opentelemetry-rust/blob/v0.21.0/opentelemetry/CHANGELOG.md).
-- Update MSRV to require Rust 1.65+, as `opentelemetry` requires it now.
+- Update MSRV to require Rust 1.65+, as `opentelemetry` requires it now. (#68)
+
+### Fixed
+
+- WASM Support (#57)
+- Fix potential deadlock (#59)
+
+Thanks to @jesseditson, @AsmPrgmC3, and @rthomas for contributing to this release!
 
 # 0.21.0 (August 28, 2023)
 
