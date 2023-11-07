@@ -7,13 +7,11 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use opentelemetry::{
-    global,
-    sdk::{
-        self,
-        export::trace::{ExportResult, SpanExporter},
-    },
-    trace::TracerProvider,
+use opentelemetry::{global, trace::TracerProvider};
+
+use opentelemetry_sdk::{
+    self as sdk,
+    export::trace::{ExportResult, SpanExporter},
 };
 use tracing::{error, instrument, span, trace, warn};
 use tracing_subscriber::prelude::*;
@@ -104,9 +102,8 @@ struct WriterExporter;
 impl SpanExporter for WriterExporter {
     fn export(
         &mut self,
-        batch: Vec<opentelemetry::sdk::export::trace::SpanData>,
-    ) -> futures_util::future::BoxFuture<'static, opentelemetry::sdk::export::trace::ExportResult>
-    {
+        batch: Vec<sdk::export::trace::SpanData>,
+    ) -> futures_util::future::BoxFuture<'static, sdk::export::trace::ExportResult> {
         let mut writer = std::io::stdout();
         for span in batch {
             writeln!(writer, "{}", SpanData(span)).unwrap();
@@ -117,7 +114,7 @@ impl SpanExporter for WriterExporter {
     }
 }
 
-struct SpanData(opentelemetry::sdk::export::trace::SpanData);
+struct SpanData(sdk::export::trace::SpanData);
 impl Display for SpanData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Span: \"{}\"", self.0.name)?;
@@ -152,8 +149,8 @@ impl Display for SpanData {
             writeln!(f, "  - {}: {}", k, v)?;
         }
         writeln!(f, "- Attributes:")?;
-        for (k, v) in self.0.attributes.iter() {
-            writeln!(f, "  - {}: {}", k, v)?;
+        for kv in self.0.attributes.iter() {
+            writeln!(f, "  - {}: {}", kv.key, kv.value)?;
         }
 
         writeln!(f, "- Events:")?;

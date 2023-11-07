@@ -1,9 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use opentelemetry::{
-    sdk::trace::{Tracer, TracerProvider},
     trace::{SpanBuilder, Tracer as _, TracerProvider as _},
     Context,
 };
+use opentelemetry_sdk::trace::{Tracer, TracerProvider};
 #[cfg(not(target_os = "windows"))]
 use pprof::criterion::{Output, PProfProfiler};
 use std::time::SystemTime;

@@ -9,7 +9,7 @@
 //! [OpenTelemetry]: https://opentelemetry.io
 //! [`tracing`]: https://github.com/tokio-rs/tracing
 //!
-//! *Compiler support: [requires `rustc` 1.60+][msrv]*
+//! *Compiler support: [requires `rustc` 1.65+][msrv]*
 //!
 //! [msrv]: #supported-rust-versions
 //!

@@ -50,7 +50,7 @@ The crate provides the following types:
 [`tracing`]: https://crates.io/crates/tracing
 [OpenTelemetry]: https://opentelemetry.io/
 
-*Compiler support: [requires `rustc` 1.60+][msrv]*
+*Compiler support: [requires `rustc` 1.65+][msrv]*
 
 [msrv]: #supported-rust-versions
 
