@@ -1,10 +1,10 @@
-use opentelemetry::{global, runtime, Key, KeyValue};
-use opentelemetry_otlp::TonicExporterBuilder;
+use opentelemetry::{global, Key, KeyValue};
 use opentelemetry_sdk::{
     metrics::{
         reader::{DefaultAggregationSelector, DefaultTemporalitySelector},
         Aggregation, Instrument, MeterProvider, PeriodicReader, Stream,
     },
+    runtime,
     trace::{BatchConfig, RandomIdGenerator, Sampler, Tracer},
     Resource,
 };
@@ -30,14 +30,13 @@ fn resource() -> Resource {
 
 // Construct MeterProvider for MetricsLayer
 fn init_meter_provider() -> MeterProvider {
-    // Currently we could not access MeterProviderBuilder from opentelemetry_otlp
-    // However to customize View we need MeterBuilder, so manually construct.
-    let exporter = opentelemetry_otlp::MetricsExporter::new(
-        TonicExporterBuilder::default(),
-        Box::new(DefaultTemporalitySelector::new()),
-        Box::new(DefaultAggregationSelector::new()),
-    )
-    .unwrap();
+    let exporter = opentelemetry_otlp::new_exporter()
+        .tonic()
+        .build_metrics_exporter(
+            Box::new(DefaultAggregationSelector::new()),
+            Box::new(DefaultTemporalitySelector::new()),
+        )
+        .unwrap();
 
     let reader = PeriodicReader::builder(exporter, runtime::Tokio)
         .with_interval(std::time::Duration::from_secs(30))

@@ -1,11 +1,11 @@
-use opentelemetry::{metrics::MetricsError, Context, KeyValue};
+use opentelemetry::{metrics::MetricsError, KeyValue};
 use opentelemetry_sdk::{
     metrics::{
         data,
         data::{Histogram, Sum},
         reader::{
             AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
-            MetricProducer, MetricReader, TemporalitySelector,
+            MetricReader, TemporalitySelector,
         },
         InstrumentKind, ManualReader, MeterProvider,
     },
@@ -395,7 +395,7 @@ fn init_subscriber<T>(
     expected_attributes: Option<AttributeSet>,
 ) -> (impl Subscriber + 'static, TestExporter<T>) {
     let reader = ManualReader::builder()
-        .with_aggregation_selector(Box::new(DefaultAggregationSelector::new()))
+        .with_aggregation_selector(DefaultAggregationSelector::new())
         .with_temporality_selector(DefaultTemporalitySelector::new())
         .build();
     let reader = TestReader {
@@ -440,16 +440,12 @@ impl MetricReader for TestReader {
         self.inner.register_pipeline(pipeline);
     }
 
-    fn register_producer(&self, producer: Box<dyn MetricProducer>) {
-        self.inner.register_producer(producer);
-    }
-
     fn collect(&self, rm: &mut data::ResourceMetrics) -> opentelemetry::metrics::Result<()> {
         self.inner.collect(rm)
     }
 
-    fn force_flush(&self, cx: &Context) -> opentelemetry::metrics::Result<()> {
-        self.inner.force_flush(cx)
+    fn force_flush(&self) -> opentelemetry::metrics::Result<()> {
+        self.inner.force_flush()
     }
 
     fn shutdown(&self) -> opentelemetry::metrics::Result<()> {

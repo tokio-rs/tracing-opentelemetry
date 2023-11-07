@@ -1,7 +1,7 @@
 use crate::{OtelData, PreSampledTracer};
 use once_cell::unsync;
 use opentelemetry::{
-    trace::{self as otel, noop, OrderMap, TraceContextExt},
+    trace::{self as otel, noop, TraceContextExt},
     Context as OtelContext, Key, KeyValue, StringValue, Value,
 };
 use std::any::TypeId;
@@ -290,10 +290,10 @@ impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
         if self.sem_conv_config.error_records_to_exceptions {
             if let Some(span) = &mut self.span_builder {
                 if let Some(attrs) = span.attributes.as_mut() {
-                    attrs.insert(
-                        Key::new(FIELD_EXCEPTION_MESSAGE),
+                    attrs.push(KeyValue::new(
+                        FIELD_EXCEPTION_MESSAGE,
                         Value::String(error_msg.clone().into()),
-                    );
+                    ));
 
                     // NOTE: This is actually not the stacktrace of the exception. This is
                     // the "source chain". It represents the heirarchy of errors from the
@@ -301,10 +301,10 @@ impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
                     // of the callsites in the code that led to the error happening.
                     // `std::error::Error::backtrace` is a nightly-only API and cannot be
                     // used here until the feature is stabilized.
-                    attrs.insert(
-                        Key::new(FIELD_EXCEPTION_STACKTRACE),
+                    attrs.push(KeyValue::new(
+                        FIELD_EXCEPTION_STACKTRACE,
                         Value::Array(chain.clone().into()),
-                    );
+                    ));
                 }
             }
         }
@@ -362,7 +362,7 @@ impl<'a> SpanAttributeVisitor<'a> {
     fn record(&mut self, attribute: KeyValue) {
         debug_assert!(self.span_builder.attributes.is_some());
         if let Some(v) = self.span_builder.attributes.as_mut() {
-            v.insert(attribute.key, attribute.value);
+            v.push(KeyValue::new(attribute.key, attribute.value));
         }
     }
 }
@@ -859,7 +859,7 @@ where
             builder.trace_id = Some(self.tracer.new_trace_id());
         }
 
-        let builder_attrs = builder.attributes.get_or_insert(OrderMap::with_capacity(
+        let builder_attrs = builder.attributes.get_or_insert(Vec::with_capacity(
             attrs.fields().len() + self.extra_span_attrs(),
         ));
 
@@ -867,26 +867,26 @@ where
             let meta = attrs.metadata();
 
             if let Some(filename) = meta.file() {
-                builder_attrs.insert("code.filepath".into(), filename.into());
+                builder_attrs.push(KeyValue::new("code.filepath", filename));
             }
 
             if let Some(module) = meta.module_path() {
-                builder_attrs.insert("code.namespace".into(), module.into());
+                builder_attrs.push(KeyValue::new("code.namespace", module));
             }
 
             if let Some(line) = meta.line() {
-                builder_attrs.insert("code.lineno".into(), (line as i64).into());
+                builder_attrs.push(KeyValue::new("code.lineno", line as i64));
             }
         }
 
         if self.with_threads {
-            THREAD_ID.with(|id| builder_attrs.insert("thread.id".into(), (**id as i64).into()));
+            THREAD_ID.with(|id| builder_attrs.push(KeyValue::new("thread.id", **id as i64)));
             if let Some(name) = std::thread::current().name() {
                 // TODO(eliza): it's a bummer that we have to allocate here, but
                 // we can't easily get the string as a `static`. it would be
                 // nice if `opentelemetry` could also take `Arc<str>`s as
                 // `String` values...
-                builder_attrs.insert("thread.name".into(), name.to_owned().into());
+                builder_attrs.push(KeyValue::new("thread.name", name.to_string()));
             }
         }
 
@@ -1090,9 +1090,9 @@ where
 
                     let attributes = builder
                         .attributes
-                        .get_or_insert_with(|| OrderMap::with_capacity(2));
-                    attributes.insert(busy_ns, timings.busy.into());
-                    attributes.insert(idle_ns, timings.idle.into());
+                        .get_or_insert_with(|| Vec::with_capacity(2));
+                    attributes.push(KeyValue::new(busy_ns, timings.busy));
+                    attributes.push(KeyValue::new(idle_ns, timings.idle));
                 }
             }
 
@@ -1168,7 +1168,7 @@ mod tests {
         where
             T: Into<Cow<'static, str>>,
         {
-            noop::NoopSpan::new()
+            noop::NoopSpan::DEFAULT
         }
         fn span_builder<T>(&self, name: T) -> otel::SpanBuilder
         where
@@ -1185,7 +1185,7 @@ mod tests {
                 builder,
                 parent_cx: parent_cx.clone(),
             });
-            noop::NoopSpan::new()
+            noop::NoopSpan::DEFAULT
         }
     }
 
@@ -1369,7 +1369,7 @@ mod tests {
         let attributes = tracer.with_data(|data| data.builder.attributes.as_ref().unwrap().clone());
         let keys = attributes
             .iter()
-            .map(|(key, _)| key.as_str())
+            .map(|kv| kv.key.as_str())
             .collect::<Vec<&str>>();
         assert!(keys.contains(&"idle_ns"));
         assert!(keys.contains(&"busy_ns"));
@@ -1405,7 +1405,7 @@ mod tests {
 
         let key_values = attributes
             .into_iter()
-            .map(|(key, value)| (key.as_str().to_owned(), value))
+            .map(|kv| (kv.key.as_str().to_owned(), kv.value))
             .collect::<HashMap<_, _>>();
 
         assert_eq!(key_values["error"].as_str(), "user error");
@@ -1467,7 +1467,7 @@ mod tests {
 
         let key_values = attributes
             .into_iter()
-            .map(|(key, value)| (key.as_str().to_owned(), value))
+            .map(|kv| (kv.key.as_str().to_owned(), kv.value))
             .collect::<HashMap<_, _>>();
 
         assert_eq!(key_values["error"].as_str(), "user error");
@@ -1508,7 +1508,7 @@ mod tests {
         let attributes = tracer.with_data(|data| data.builder.attributes.as_ref().unwrap().clone());
         let keys = attributes
             .iter()
-            .map(|(key, _)| key.as_str())
+            .map(|kv| kv.key.as_str())
             .collect::<Vec<&str>>();
         assert!(keys.contains(&"code.filepath"));
         assert!(keys.contains(&"code.namespace"));
@@ -1528,7 +1528,7 @@ mod tests {
         let attributes = tracer.with_data(|data| data.builder.attributes.as_ref().unwrap().clone());
         let keys = attributes
             .iter()
-            .map(|(key, _)| key.as_str())
+            .map(|kv| kv.key.as_str())
             .collect::<Vec<&str>>();
         assert!(!keys.contains(&"code.filepath"));
         assert!(!keys.contains(&"code.namespace"));
@@ -1554,7 +1554,7 @@ mod tests {
         let attributes = tracer
             .with_data(|data| data.builder.attributes.as_ref().unwrap().clone())
             .drain(..)
-            .map(|(key, value)| (key.as_str().to_string(), value))
+            .map(|kv| (kv.key.as_str().to_string(), kv.value))
             .collect::<HashMap<_, _>>();
         assert_eq!(attributes.get("thread.name"), expected_name.as_ref());
         assert_eq!(attributes.get("thread.id"), Some(&expected_id));
@@ -1573,7 +1573,7 @@ mod tests {
         let attributes = tracer.with_data(|data| data.builder.attributes.as_ref().unwrap().clone());
         let keys = attributes
             .iter()
-            .map(|(key, _)| key.as_str())
+            .map(|kv| kv.key.as_str())
             .collect::<Vec<&str>>();
         assert!(!keys.contains(&"thread.name"));
         assert!(!keys.contains(&"thread.id"));
@@ -1611,7 +1611,7 @@ mod tests {
 
         let key_values = attributes
             .into_iter()
-            .map(|(key, value)| (key.as_str().to_owned(), value))
+            .map(|kv| (kv.key.as_str().to_owned(), kv.value))
             .collect::<HashMap<_, _>>();
 
         assert_eq!(key_values[FIELD_EXCEPTION_MESSAGE].as_str(), "user error");
@@ -1663,7 +1663,7 @@ mod tests {
 
         let key_values = attributes
             .into_iter()
-            .map(|(key, value)| (key.as_str().to_owned(), value))
+            .map(|kv| (kv.key.as_str().to_owned(), kv.value))
             .collect::<HashMap<_, _>>();
 
         assert_eq!(key_values[FIELD_EXCEPTION_MESSAGE].as_str(), "user error");

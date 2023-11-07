@@ -201,7 +201,7 @@ impl OpenTelemetrySpanExt for tracing::Span {
                         .attributes
                         .as_mut()
                         .unwrap()
-                        .insert(key.take().unwrap(), value.take().unwrap());
+                        .push(KeyValue::new(key.take().unwrap(), value.take().unwrap()));
                 })
             }
         });

@@ -1,10 +1,8 @@
 use futures_util::future::BoxFuture;
-use opentelemetry::{
-    sdk::{
-        export::trace::{ExportResult, SpanData, SpanExporter},
-        trace::{Tracer, TracerProvider},
-    },
-    trace::TracerProvider as _,
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_sdk::{
+    export::trace::{ExportResult, SpanData, SpanExporter},
+    trace::{Tracer, TracerProvider},
 };
 use std::sync::{Arc, Mutex};
 use tracing::{instrument, Subscriber};
