@@ -66,10 +66,9 @@ impl PreSampledTracer for noop::NoopTracer {
 impl PreSampledTracer for SdkTracer {
     fn sampled_context(&self, data: &mut crate::OtelData) -> OtelContext {
         // Ensure tracing pipeline is still installed.
-        if self.provider().is_none() {
+        let Some(provider) = self.provider() else {
             return OtelContext::new();
-        }
-        let provider = self.provider().unwrap();
+        };
         let parent_cx = &data.parent_cx;
         let builder = &mut data.builder;
 
