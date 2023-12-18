@@ -854,10 +854,13 @@ where
             // Eagerly assign span id so children have stable parent id
             .with_span_id(self.tracer.new_span_id());
 
-        // Record new trace id if there is no active parent span
-        if !parent_cx.has_active_span() {
-            builder.trace_id = Some(self.tracer.new_trace_id());
-        }
+        builder.trace_id = if parent_cx.has_active_span() {
+            // Use the parent span trace_id when there's a parent span
+            Some(parent_cx.span().span_context().trace_id())
+        } else {
+            // Otherwise generate a new trace_id
+            Some(self.tracer.new_trace_id())
+        };
 
         let builder_attrs = builder.attributes.get_or_insert(Vec::with_capacity(
             attrs.fields().len() + self.extra_span_attrs(),
@@ -1154,14 +1157,34 @@ mod tests {
         collections::HashMap,
         error::Error,
         fmt::Display,
-        sync::{Arc, Mutex},
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc, Mutex,
+        },
         thread,
         time::SystemTime,
     };
     use tracing_subscriber::prelude::*;
 
     #[derive(Debug, Clone)]
-    struct TestTracer(Arc<Mutex<Option<OtelData>>>);
+    struct TestTracer {
+        data: Arc<Mutex<Option<OtelData>>>,
+        trace_id: Arc<AtomicU64>,
+        span_id: Arc<AtomicU64>,
+    }
+
+    impl Default for TestTracer {
+        fn default() -> Self {
+            let data = Arc::new(Mutex::new(None));
+            let trace_id = Arc::new(AtomicU64::new(1));
+            let span_id = Arc::new(AtomicU64::new(1));
+            Self {
+                data,
+                trace_id,
+                span_id,
+            }
+        }
+    }
     impl otel::Tracer for TestTracer {
         type Span = noop::NoopSpan;
         fn start_with_context<T>(&self, _name: T, _context: &OtelContext) -> Self::Span
@@ -1181,7 +1204,7 @@ mod tests {
             builder: otel::SpanBuilder,
             parent_cx: &OtelContext,
         ) -> Self::Span {
-            *self.0.lock().unwrap() = Some(OtelData {
+            *self.data.lock().unwrap() = Some(OtelData {
                 builder,
                 parent_cx: parent_cx.clone(),
             });
@@ -1194,16 +1217,18 @@ mod tests {
             OtelContext::new()
         }
         fn new_trace_id(&self) -> otel::TraceId {
-            otel::TraceId::INVALID
+            // Return a valid trace_id (non-zero)
+            otel::TraceId::from(u128::from(self.trace_id.fetch_add(1, Ordering::SeqCst)))
         }
         fn new_span_id(&self) -> otel::SpanId {
-            otel::SpanId::INVALID
+            // Return a valid span_id (non-zero)
+            otel::SpanId::from(self.span_id.fetch_add(1, Ordering::SeqCst))
         }
     }
 
     impl TestTracer {
         fn with_data<T>(&self, f: impl FnOnce(&OtelData) -> T) -> T {
-            let lock = self.0.lock().unwrap();
+            let lock = self.data.lock().unwrap();
             let data = lock.as_ref().expect("no span data has been recorded yet");
             f(data)
         }
@@ -1264,7 +1289,7 @@ mod tests {
     #[test]
     fn dynamic_span_names() {
         let dynamic_name = "GET http://example.com".to_string();
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
 
         tracing::subscriber::with_default(subscriber, || {
@@ -1272,7 +1297,7 @@ mod tests {
         });
 
         let recorded_name = tracer
-            .0
+            .data
             .lock()
             .unwrap()
             .as_ref()
@@ -1282,7 +1307,7 @@ mod tests {
 
     #[test]
     fn span_kind() {
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
 
         tracing::subscriber::with_default(subscriber, || {
@@ -1295,7 +1320,7 @@ mod tests {
 
     #[test]
     fn span_status_code() {
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
 
         tracing::subscriber::with_default(subscriber, || {
@@ -1308,7 +1333,7 @@ mod tests {
 
     #[test]
     fn span_status_message() {
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
 
         let message = "message";
@@ -1318,7 +1343,7 @@ mod tests {
         });
 
         let recorded_status_message = tracer
-            .0
+            .data
             .lock()
             .unwrap()
             .as_ref()
@@ -1332,11 +1357,11 @@ mod tests {
 
     #[test]
     fn trace_id_from_existing_context() {
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
-        let trace_id = otel::TraceId::from(42u128);
+        let expected_trace_id = otel::TraceId::from(42u128);
         let existing_cx = OtelContext::current_with_span(TestSpan(otel::SpanContext::new(
-            trace_id,
+            expected_trace_id,
             otel::SpanId::from(1u64),
             TraceFlags::default(),
             false,
@@ -1345,17 +1370,33 @@ mod tests {
         let _g = existing_cx.attach();
 
         tracing::subscriber::with_default(subscriber, || {
-            tracing::debug_span!("request", otel.kind = "server");
+            tracing::debug_span!("request", otel.kind = "server").in_scope(|| {
+                tracing::debug_span!("handler", otel.kind = "server");
+            });
         });
 
-        let recorded_trace_id =
-            tracer.with_data(|data| data.parent_cx.span().span_context().trace_id());
-        assert_eq!(recorded_trace_id, trace_id)
+        let actual_trace_id = tracer.with_data(|data| data.builder.trace_id.unwrap());
+        assert_eq!(actual_trace_id, expected_trace_id);
+    }
+
+    #[test]
+    fn trace_id_from_new_context() {
+        let tracer = TestTracer::default();
+        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug_span!("request", otel.kind = "server").in_scope(|| {
+                tracing::debug_span!("handler", otel.kind = "server");
+            });
+        });
+
+        let actual_trace_id = tracer.with_data(|data| data.builder.trace_id.unwrap());
+        assert_eq!(actual_trace_id, otel::TraceId::from(1u128));
     }
 
     #[test]
     fn includes_timings() {
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(
             layer()
                 .with_tracer(tracer.clone())
@@ -1377,7 +1418,7 @@ mod tests {
 
     #[test]
     fn records_error_fields() {
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
 
         let err = TestDynError::new("base error")
@@ -1392,7 +1433,7 @@ mod tests {
         });
 
         let attributes = tracer
-            .0
+            .data
             .lock()
             .unwrap()
             .as_ref()
@@ -1435,7 +1476,7 @@ mod tests {
 
     #[test]
     fn records_no_error_fields() {
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(
             layer()
                 .with_error_records_to_exceptions(false)
@@ -1454,7 +1495,7 @@ mod tests {
         });
 
         let attributes = tracer
-            .0
+            .data
             .lock()
             .unwrap()
             .as_ref()
@@ -1497,7 +1538,7 @@ mod tests {
 
     #[test]
     fn includes_span_location() {
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry()
             .with(layer().with_tracer(tracer.clone()).with_location(true));
 
@@ -1517,7 +1558,7 @@ mod tests {
 
     #[test]
     fn excludes_span_location() {
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry()
             .with(layer().with_tracer(tracer.clone()).with_location(false));
 
@@ -1543,7 +1584,7 @@ mod tests {
             .map(|name| Value::String(name.to_owned().into()));
         let expected_id = Value::I64(thread_id_integer(thread.id()) as i64);
 
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry()
             .with(layer().with_tracer(tracer.clone()).with_threads(true));
 
@@ -1562,7 +1603,7 @@ mod tests {
 
     #[test]
     fn excludes_thread() {
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry()
             .with(layer().with_tracer(tracer.clone()).with_threads(false));
 
@@ -1581,7 +1622,7 @@ mod tests {
 
     #[test]
     fn propagates_error_fields_from_event_to_span() {
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
 
         let err = TestDynError::new("base error")
@@ -1598,7 +1639,7 @@ mod tests {
         });
 
         let attributes = tracer
-            .0
+            .data
             .lock()
             .unwrap()
             .as_ref()
@@ -1629,7 +1670,7 @@ mod tests {
 
     #[test]
     fn propagates_no_error_fields_from_event_to_span() {
-        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(
             layer()
                 .with_error_fields_to_exceptions(false)
@@ -1650,7 +1691,7 @@ mod tests {
         });
 
         let attributes = tracer
-            .0
+            .data
             .lock()
             .unwrap()
             .as_ref()
