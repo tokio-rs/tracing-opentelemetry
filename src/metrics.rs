@@ -145,8 +145,9 @@ pub(crate) struct MetricVisitor<'a> {
 }
 
 impl<'a> Visit for MetricVisitor<'a> {
-    fn record_debug(&mut self, _field: &Field, _value: &dyn fmt::Debug) {
-        // Do nothing
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        self.attributes
+            .push(KeyValue::new(field.name(), format!("{value:?}")));
     }
 
     fn record_u64(&mut self, field: &Field, value: u64) {
