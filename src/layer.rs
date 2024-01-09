@@ -759,16 +759,30 @@ where
     /// [`span`]: tracing::Span
     /// [`Registry`]: tracing_subscriber::Registry
     fn parent_context(&self, attrs: &Attributes<'_>, ctx: &Context<'_, S>) -> OtelContext {
-        // If a span is specified, it _should_ exist in the underlying `Registry`.
         if let Some(parent) = attrs.parent() {
-            let span = ctx.span(parent).expect("Span not found, this is a bug");
-            let mut extensions = span.extensions_mut();
-            extensions
-                .get_mut::<OtelData>()
-                .map(|builder| self.tracer.sampled_context(builder))
-                .unwrap_or_default()
+            // A span can have an _explicit_ parent that is NOT seen by this `Layer` (for which
+            // `Context::span` returns `None`. This happens if the parent span is filtered away
+            // from the layer by a per-layer filter. In that case, we fall-through to the `else`
+            // case, and consider this span a root span.
+            //
+            // This is likely rare, as most users who use explicit parents will configure their
+            // filters so that children and parents are both seen, but its not guaranteed. Also,
+            // if users configure their filter with a `reload` filter, its possible that a parent
+            // and child have different filters as they are created with a filter change
+            // in-between.
+            //
+            // In these case, we prefer to emit a smaller span tree instead of panicking.
+            if let Some(span) = ctx.span(parent) {
+                let mut extensions = span.extensions_mut();
+                return extensions
+                    .get_mut::<OtelData>()
+                    .map(|builder| self.tracer.sampled_context(builder))
+                    .unwrap_or_default();
+            }
+        }
+
         // Else if the span is inferred from context, look up any available current span.
-        } else if attrs.is_contextual() {
+        if attrs.is_contextual() {
             ctx.lookup_current()
                 .and_then(|span| {
                     let mut extensions = span.extensions_mut();
@@ -948,25 +962,27 @@ where
             .get_mut::<OtelData>()
             .expect("Missing otel data span extensions");
 
-        let follows_span = ctx
-            .span(follows)
-            .expect("Span to follow not found, this is a bug");
-        let mut follows_extensions = follows_span.extensions_mut();
-        let follows_data = follows_extensions
-            .get_mut::<OtelData>()
-            .expect("Missing otel data span extensions");
+        // The follows span may be filtered away from this layer, in which case
+        // we just drop the data, as opposed to panicking. This uses the same
+        // reasoning as `parent_context` above.
+        if let Some(follows_span) = ctx.span(follows) {
+            let mut follows_extensions = follows_span.extensions_mut();
+            let follows_data = follows_extensions
+                .get_mut::<OtelData>()
+                .expect("Missing otel data span extensions");
 
-        let follows_context = self
-            .tracer
-            .sampled_context(follows_data)
-            .span()
-            .span_context()
-            .clone();
-        let follows_link = otel::Link::new(follows_context, Vec::new());
-        if let Some(ref mut links) = data.builder.links {
-            links.push(follows_link);
-        } else {
-            data.builder.links = Some(vec![follows_link]);
+            let follows_context = self
+                .tracer
+                .sampled_context(follows_data)
+                .span()
+                .span_context()
+                .clone();
+            let follows_link = otel::Link::new(follows_context, Vec::new());
+            if let Some(ref mut links) = data.builder.links {
+                links.push(follows_link);
+            } else {
+                data.builder.links = Some(vec![follows_link]);
+            }
         }
     }
 
