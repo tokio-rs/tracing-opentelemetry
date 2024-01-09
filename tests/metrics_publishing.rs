@@ -164,22 +164,6 @@ async fn f64_histogram_is_exported() {
     exporter.export().unwrap();
 }
 
-struct DisplayAttribute(String);
-
-impl std::fmt::Display for DisplayAttribute {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "display: {}", self.0)
-    }
-}
-
-struct DebugAttribute(String);
-
-impl std::fmt::Debug for DebugAttribute {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "debug: {}", self.0)
-    }
-}
-
 #[tokio::test]
 async fn u64_counter_with_attributes_is_exported() {
     let (subscriber, exporter) = init_subscriber(
@@ -193,15 +177,10 @@ async fn u64_counter_with_attributes_is_exported() {
                 KeyValue::new("f64_key_1", 3_f64),
                 KeyValue::new("str_key_1", "foo"),
                 KeyValue::new("bool_key_1", true),
-                KeyValue::new("display_key_1", "display: bar"),
-                KeyValue::new("debug_key_1", "debug: baz"),
             ]
             .as_slice(),
         )),
     );
-
-    let display_attribute = DisplayAttribute("bar".to_string());
-    let debug_attribute = DebugAttribute("baz".to_string());
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(
@@ -211,8 +190,6 @@ async fn u64_counter_with_attributes_is_exported() {
             f64_key_1 = 3_f64,
             str_key_1 = "foo",
             bool_key_1 = true,
-            display_key_1 = %display_attribute,
-            debug_key_1 = ?debug_attribute,
         );
     });
 
@@ -232,15 +209,10 @@ async fn f64_counter_with_attributes_is_exported() {
                 KeyValue::new("f64_key_1", 3_f64),
                 KeyValue::new("str_key_1", "foo"),
                 KeyValue::new("bool_key_1", true),
-                KeyValue::new("display_key_1", "display: bar"),
-                KeyValue::new("debug_key_1", "debug: baz"),
             ]
             .as_slice(),
         )),
     );
-
-    let display_attribute = DisplayAttribute("bar".to_string());
-    let debug_attribute = DebugAttribute("baz".to_string());
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(
@@ -250,8 +222,6 @@ async fn f64_counter_with_attributes_is_exported() {
             f64_key_1 = 3_f64,
             str_key_1 = "foo",
             bool_key_1 = true,
-            display_key_1 = %display_attribute,
-            debug_key_1 = ?debug_attribute,
         );
     });
 
@@ -271,15 +241,10 @@ async fn i64_up_down_counter_with_attributes_is_exported() {
                 KeyValue::new("f64_key_1", 3_f64),
                 KeyValue::new("str_key_1", "foo"),
                 KeyValue::new("bool_key_1", true),
-                KeyValue::new("display_key_1", "display: bar"),
-                KeyValue::new("debug_key_1", "debug: baz"),
             ]
             .as_slice(),
         )),
     );
-
-    let display_attribute = DisplayAttribute("bar".to_string());
-    let debug_attribute = DebugAttribute("baz".to_string());
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(
@@ -289,8 +254,6 @@ async fn i64_up_down_counter_with_attributes_is_exported() {
             f64_key_1 = 3_f64,
             str_key_1 = "foo",
             bool_key_1 = true,
-            display_key_1 = %display_attribute,
-            debug_key_1 = ?debug_attribute,
         );
     });
 
@@ -310,15 +273,10 @@ async fn f64_up_down_counter_with_attributes_is_exported() {
                 KeyValue::new("f64_key_1", 3_f64),
                 KeyValue::new("str_key_1", "foo"),
                 KeyValue::new("bool_key_1", true),
-                KeyValue::new("display_key_1", "display: bar"),
-                KeyValue::new("debug_key_1", "debug: baz"),
             ]
             .as_slice(),
         )),
     );
-
-    let display_attribute = DisplayAttribute("bar".to_string());
-    let debug_attribute = DebugAttribute("baz".to_string());
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(
@@ -328,8 +286,6 @@ async fn f64_up_down_counter_with_attributes_is_exported() {
             f64_key_1 = 3_f64,
             str_key_1 = "foo",
             bool_key_1 = true,
-            display_key_1 = %display_attribute,
-            debug_key_1 = ?debug_attribute,
         );
     });
 
@@ -349,15 +305,10 @@ async fn u64_histogram_with_attributes_is_exported() {
                 KeyValue::new("f64_key_1", 3_f64),
                 KeyValue::new("str_key_1", "foo"),
                 KeyValue::new("bool_key_1", true),
-                KeyValue::new("display_key_1", "display: bar"),
-                KeyValue::new("debug_key_1", "debug: baz"),
             ]
             .as_slice(),
         )),
     );
-
-    let display_attribute = DisplayAttribute("bar".to_string());
-    let debug_attribute = DebugAttribute("baz".to_string());
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(
@@ -367,8 +318,6 @@ async fn u64_histogram_with_attributes_is_exported() {
             f64_key_1 = 3_f64,
             str_key_1 = "foo",
             bool_key_1 = true,
-            display_key_1 = %display_attribute,
-            debug_key_1 = ?debug_attribute,
         );
     });
 
@@ -388,15 +337,10 @@ async fn i64_histogram_with_attributes_is_exported() {
                 KeyValue::new("f64_key_1", 3_f64),
                 KeyValue::new("str_key_1", "foo"),
                 KeyValue::new("bool_key_1", true),
-                KeyValue::new("display_key_1", "display: bar"),
-                KeyValue::new("debug_key_1", "debug: baz"),
             ]
             .as_slice(),
         )),
     );
-
-    let display_attribute = DisplayAttribute("bar".to_string());
-    let debug_attribute = DebugAttribute("baz".to_string());
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(
@@ -406,8 +350,6 @@ async fn i64_histogram_with_attributes_is_exported() {
             f64_key_1 = 3_f64,
             str_key_1 = "foo",
             bool_key_1 = true,
-            display_key_1 = %display_attribute,
-            debug_key_1 = ?debug_attribute,
         );
     });
 
@@ -427,15 +369,10 @@ async fn f64_histogram_with_attributes_is_exported() {
                 KeyValue::new("f64_key_1", 3_f64),
                 KeyValue::new("str_key_1", "foo"),
                 KeyValue::new("bool_key_1", true),
-                KeyValue::new("display_key_1", "display: bar"),
-                KeyValue::new("debug_key_1", "debug: baz"),
             ]
             .as_slice(),
         )),
     );
-
-    let display_attribute = DisplayAttribute("bar".to_string());
-    let debug_attribute = DebugAttribute("baz".to_string());
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(
@@ -445,7 +382,67 @@ async fn f64_histogram_with_attributes_is_exported() {
             f64_key_1 = 3_f64,
             str_key_1 = "foo",
             bool_key_1 = true,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
+#[tokio::test]
+async fn display_attribute_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Counter,
+        1_u64,
+        Some(AttributeSet::from(
+            [KeyValue::new("display_key_1", "display: foo")].as_slice(),
+        )),
+    );
+
+    struct DisplayAttribute(String);
+
+    impl std::fmt::Display for DisplayAttribute {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "display: {}", self.0)
+        }
+    }
+
+    let display_attribute = DisplayAttribute("foo".to_string());
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            monotonic_counter.hello_world = 1_u64,
             display_key_1 = %display_attribute,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
+#[tokio::test]
+async fn debug_attribute_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Counter,
+        1_u64,
+        Some(AttributeSet::from(
+            [KeyValue::new("debug_key_1", "debug: foo")].as_slice(),
+        )),
+    );
+
+    struct DebugAttribute(String);
+
+    impl std::fmt::Debug for DebugAttribute {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "debug: {}", self.0)
+        }
+    }
+
+    let debug_attribute = DebugAttribute("foo".to_string());
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            monotonic_counter.hello_world = 1_u64,
             debug_key_1 = ?debug_attribute,
         );
     });
