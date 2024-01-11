@@ -962,9 +962,9 @@ where
             .get_mut::<OtelData>()
             .expect("Missing otel data span extensions");
 
-        // The follows span may be filtered away from this layer, in which case
-        // we just drop the data, as opposed to panicking. This uses the same
-        // reasoning as `parent_context` above.
+        // The follows span may be filtered away (or closed), from this layer,
+        // in which case we just drop the data, as opposed to panicking. This
+        // uses the same reasoning as `parent_context` above.
         if let Some(follows_span) = ctx.span(follows) {
             let mut follows_extensions = follows_span.extensions_mut();
             let follows_data = follows_extensions
