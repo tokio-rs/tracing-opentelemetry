@@ -58,7 +58,7 @@ pprof = { version = "0.13.0", features = ["flamegraph", "criterion"] }
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
 js-sys = "0.3.64"
-web-time = "0.2.0"
+web-time = "1.0.0"
 
 [lib]
 bench = false
