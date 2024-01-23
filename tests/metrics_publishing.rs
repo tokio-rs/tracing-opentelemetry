@@ -388,6 +388,68 @@ async fn f64_histogram_with_attributes_is_exported() {
     exporter.export().unwrap();
 }
 
+#[tokio::test]
+async fn display_attribute_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Counter,
+        1_u64,
+        Some(AttributeSet::from(
+            [KeyValue::new("display_key_1", "display: foo")].as_slice(),
+        )),
+    );
+
+    struct DisplayAttribute(String);
+
+    impl std::fmt::Display for DisplayAttribute {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "display: {}", self.0)
+        }
+    }
+
+    let display_attribute = DisplayAttribute("foo".to_string());
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            monotonic_counter.hello_world = 1_u64,
+            display_key_1 = %display_attribute,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
+#[tokio::test]
+async fn debug_attribute_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Counter,
+        1_u64,
+        Some(AttributeSet::from(
+            [KeyValue::new("debug_key_1", "debug: foo")].as_slice(),
+        )),
+    );
+
+    struct DebugAttribute(String);
+
+    impl std::fmt::Debug for DebugAttribute {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "debug: {}", self.0)
+        }
+    }
+
+    let debug_attribute = DebugAttribute("foo".to_string());
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            monotonic_counter.hello_world = 1_u64,
+            debug_key_1 = ?debug_attribute,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
 fn init_subscriber<T>(
     expected_metric_name: String,
     expected_instrument_kind: InstrumentKind,
