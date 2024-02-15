@@ -766,8 +766,8 @@ where
             // case, and consider this span a root span.
             //
             // This is likely rare, as most users who use explicit parents will configure their
-            // filters so that children and parents are both seen, but its not guaranteed. Also,
-            // if users configure their filter with a `reload` filter, its possible that a parent
+            // filters so that children and parents are both seen, but it's not guaranteed. Also,
+            // if users configure their filter with a `reload` filter, it's possible that a parent
             // and child have different filters as they are created with a filter change
             // in-between.
             //
