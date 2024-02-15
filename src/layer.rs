@@ -996,7 +996,12 @@ where
     /// [`Error`]: opentelemetry::trace::StatusCode::Error
     fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
         // Ignore events that are not in the context of a span
-        if let Some(span) = ctx.lookup_current() {
+        if let Some(span) = event.parent().and_then(|id| ctx.span(id)).or_else(|| {
+            event
+                .is_contextual()
+                .then(|| ctx.lookup_current())
+                .flatten()
+        }) {
             // Performing read operations before getting a write lock to avoid a deadlock
             // See https://github.com/tokio-rs/tracing/issues/763
             #[cfg(feature = "tracing-log")]
