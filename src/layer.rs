@@ -1746,4 +1746,29 @@ mod tests {
             )
         );
     }
+
+    #[test]
+    fn tracing_error_compatibility() {
+        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let subscriber = tracing_subscriber::registry()
+            .with(
+                layer()
+                    .with_error_fields_to_exceptions(false)
+                    .with_tracer(tracer.clone()),
+            )
+            .with(tracing_error::ErrorLayer::default());
+
+        tracing::subscriber::with_default(subscriber, || {
+            let span = tracing::info_span!("Blows up!", exception = tracing::field::Empty);
+            let _entered = span.enter();
+            let context = tracing_error::SpanTrace::capture();
+
+            // This can cause a deadlock if `on_record` locks extensions while attributes are visited
+            span.record("exception", &tracing::field::debug(&context));
+            // This can cause a deadlock if `on_event` locks extensions while the event is visited
+            tracing::info!(exception = &tracing::field::debug(&context), "hello");
+        });
+
+        // No need to assert anything, as long as this finished (and did not panic), everything is ok.
+    }
 }
