@@ -218,12 +218,12 @@ impl<'a> Visit for MetricVisitor<'a> {
 /// use tracing_opentelemetry::MetricsLayer;
 /// use tracing_subscriber::layer::SubscriberExt;
 /// use tracing_subscriber::Registry;
-/// # use opentelemetry_sdk::metrics::MeterProvider;
+/// # use opentelemetry_sdk::metrics::SdkMeterProvider;
 ///
 /// // Constructing a MeterProvider is out-of-scope for the docs here, but there
 /// // are examples in the opentelemetry repository. See:
 /// // https://github.com/open-telemetry/opentelemetry-rust/blob/dfeac078ff7853e7dc814778524b93470dfa5c9c/examples/metrics-basic/src/main.rs#L7
-/// # let meter_provider: MeterProvider = unimplemented!();
+/// # let meter_provider: SdkMeterProvider = unimplemented!();
 ///
 /// let opentelemetry_metrics =  MetricsLayer::new(meter_provider);
 /// let subscriber = Registry::default().with(opentelemetry_metrics);
@@ -305,7 +305,7 @@ impl<'a> Visit for MetricVisitor<'a> {
 /// # use tracing::info;
 /// // adds attributes bar="baz" and qux=2 to the `foo` counter.
 /// info!(monotonic_counter.foo = 1, bar = "baz", qux = 2);
-/// ```      
+/// ```
 ///
 /// # Implementation Details
 ///
