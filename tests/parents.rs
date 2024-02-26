@@ -33,7 +33,11 @@ fn test_tracer() -> (Tracer, TracerProvider, TestExporter, impl Subscriber) {
     let tracer = provider.tracer("test");
 
     let subscriber = tracing_subscriber::registry()
-        .with(layer().with_tracer(tracer.clone()).with_filter(LevelFilter::DEBUG))
+        .with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_filter(LevelFilter::DEBUG),
+        )
         .with(tracing_subscriber::fmt::layer().with_filter(LevelFilter::TRACE));
 
     (tracer, provider, exporter, subscriber)
@@ -81,7 +85,11 @@ fn explicit_parents_of_events() {
         let expected_root_events = ["1", "2", "5", "8", "9", "13"];
 
         let root_span = spans.iter().find(|s| s.name == "root").unwrap();
-        let actual_events: Vec<_> = root_span.events.iter().map(|event| event.name.to_string()).collect();
+        let actual_events: Vec<_> = root_span
+            .events
+            .iter()
+            .map(|event| event.name.to_string())
+            .collect();
 
         assert_eq!(&expected_root_events, &actual_events[..]);
     }
@@ -91,7 +99,11 @@ fn explicit_parents_of_events() {
         let expected_child_events = ["4", "6", "10", "14"];
 
         let child_span = spans.iter().find(|s| s.name == "child").unwrap();
-        let actual_events: Vec<_> = child_span.events.iter().map(|event| event.name.to_string()).collect();
+        let actual_events: Vec<_> = child_span
+            .events
+            .iter()
+            .map(|event| event.name.to_string())
+            .collect();
 
         assert_eq!(&expected_child_events, &actual_events[..]);
     }

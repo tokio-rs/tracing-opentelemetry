@@ -51,6 +51,7 @@ futures-util = { version = "0.3", default-features = false }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
 tracing = { version = "0.1.35", default-features = false, features = ["std", "attributes"] }
+tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.0", default-features = false, features = ["registry", "std", "fmt"] }
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
