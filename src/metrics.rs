@@ -30,7 +30,6 @@ pub(crate) struct Instruments {
     i64_up_down_counter: MetricsMap<UpDownCounter<i64>>,
     f64_up_down_counter: MetricsMap<UpDownCounter<f64>>,
     u64_histogram: MetricsMap<Histogram<u64>>,
-    i64_histogram: MetricsMap<Histogram<i64>>,
     f64_histogram: MetricsMap<Histogram<f64>>,
 }
 
@@ -43,7 +42,6 @@ pub(crate) enum InstrumentType {
     UpDownCounterI64(i64),
     UpDownCounterF64(f64),
     HistogramU64(u64),
-    HistogramI64(i64),
     HistogramF64(f64),
 }
 
@@ -119,14 +117,6 @@ impl Instruments {
                     |rec| rec.record(value, attributes),
                 );
             }
-            InstrumentType::HistogramI64(value) => {
-                update_or_insert(
-                    &self.i64_histogram,
-                    metric_name,
-                    || meter.i64_histogram(metric_name).init(),
-                    |rec| rec.record(value, attributes),
-                );
-            }
             InstrumentType::HistogramF64(value) => {
                 update_or_insert(
                     &self.f64_histogram,
@@ -198,9 +188,6 @@ impl<'a> Visit for MetricVisitor<'a> {
         } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::UpDownCounterI64(value)));
-        } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_HISTOGRAM) {
-            self.visited_metrics
-                .push((metric_name, InstrumentType::HistogramI64(value)));
         } else {
             self.attributes.push(KeyValue::new(field.name(), value));
         }
