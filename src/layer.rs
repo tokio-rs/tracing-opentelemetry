@@ -1291,18 +1291,12 @@ fn thread_id_integer(id: thread::ThreadId) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::OtelData;
-    use opentelemetry::{
-        trace::{noop, TraceFlags},
-        StringValue,
-    };
+    use opentelemetry::trace::TraceFlags;
     use std::{
-        borrow::Cow,
         collections::HashMap,
         error::Error,
         fmt::Display,
         sync::{Arc, Mutex},
-        thread,
         time::SystemTime,
     };
     use tracing_subscriber::prelude::*;
