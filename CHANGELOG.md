@@ -1,3 +1,12 @@
+# 0.23.0 (February 26, 2024)
+
+### Breaking Changes
+
+- Upgrade to opentelemetry 0.22. Refer to the upstream
+  [changelog](https://github.com/open-telemetry/opentelemetry-rust/releases/tag/v0.22.0)
+  for more information. In particular, i64 histograms will silently downgrade to
+  key/value exports.
+
 # 0.22.0 (November 7, 2023)
 
 ### Breaking Changes

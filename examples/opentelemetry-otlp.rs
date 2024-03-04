@@ -2,7 +2,7 @@ use opentelemetry::{global, Key, KeyValue};
 use opentelemetry_sdk::{
     metrics::{
         reader::{DefaultAggregationSelector, DefaultTemporalitySelector},
-        Aggregation, Instrument, MeterProvider, PeriodicReader, Stream,
+        Aggregation, Instrument, MeterProviderBuilder, PeriodicReader, SdkMeterProvider, Stream,
     },
     runtime,
     trace::{BatchConfig, RandomIdGenerator, Sampler, Tracer},
@@ -29,7 +29,7 @@ fn resource() -> Resource {
 }
 
 // Construct MeterProvider for MetricsLayer
-fn init_meter_provider() -> MeterProvider {
+fn init_meter_provider() -> SdkMeterProvider {
     let exporter = opentelemetry_otlp::new_exporter()
         .tonic()
         .build_metrics_exporter(
@@ -78,7 +78,7 @@ fn init_meter_provider() -> MeterProvider {
         }
     };
 
-    let meter_provider = MeterProvider::builder()
+    let meter_provider = MeterProviderBuilder::default()
         .with_resource(resource())
         .with_reader(reader)
         .with_reader(stdout_reader)
@@ -128,7 +128,7 @@ fn init_tracing_subscriber() -> OtelGuard {
 }
 
 struct OtelGuard {
-    meter_provider: MeterProvider,
+    meter_provider: SdkMeterProvider,
 }
 
 impl Drop for OtelGuard {

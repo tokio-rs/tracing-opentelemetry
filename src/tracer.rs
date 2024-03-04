@@ -158,7 +158,7 @@ fn process_sampling_result(
 mod tests {
     use super::*;
     use crate::OtelData;
-    use opentelemetry::trace::{SpanBuilder, SpanId, TracerProvider as _};
+    use opentelemetry::trace::TracerProvider as _;
     use opentelemetry_sdk::trace::{config, Sampler, TracerProvider};
 
     #[test]

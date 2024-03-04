@@ -1,13 +1,12 @@
 use opentelemetry::{metrics::MetricsError, KeyValue};
 use opentelemetry_sdk::{
     metrics::{
-        data,
-        data::{Histogram, Sum},
+        data::{self, Histogram, Sum},
         reader::{
             AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
             MetricReader, TemporalitySelector,
         },
-        InstrumentKind, ManualReader, MeterProvider,
+        InstrumentKind, ManualReader, MeterProviderBuilder, SdkMeterProvider,
     },
     AttributeSet, Resource,
 };
@@ -416,7 +415,9 @@ fn init_subscriber<T>(
         inner: Arc::new(reader),
     };
 
-    let provider = MeterProvider::builder().with_reader(reader.clone()).build();
+    let provider = MeterProviderBuilder::default()
+        .with_reader(reader.clone())
+        .build();
     let exporter = TestExporter {
         expected_metric_name,
         expected_instrument_kind,
@@ -473,7 +474,7 @@ struct TestExporter<T> {
     expected_value: T,
     expected_attributes: Option<AttributeSet>,
     reader: TestReader,
-    _meter_provider: MeterProvider,
+    _meter_provider: SdkMeterProvider,
 }
 
 impl<T> TestExporter<T>
