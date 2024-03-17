@@ -2,6 +2,8 @@ use std::{collections::HashMap, fmt, sync::RwLock};
 use tracing::{field::Visit, Subscriber};
 use tracing_core::{Field, Interest, Metadata};
 
+#[cfg(feature="otel_unstable")]
+use opentelemetry::metrics::Gauge;
 use opentelemetry::{
     metrics::{Counter, Histogram, Meter, MeterProvider, UpDownCounter},
     KeyValue, Value,
@@ -21,6 +23,9 @@ const INSTRUMENTATION_LIBRARY_NAME: &str = "tracing/tracing-opentelemetry";
 const METRIC_PREFIX_MONOTONIC_COUNTER: &str = "monotonic_counter.";
 const METRIC_PREFIX_COUNTER: &str = "counter.";
 const METRIC_PREFIX_HISTOGRAM: &str = "histogram.";
+#[cfg(feature="otel_unstable")]
+const METRIC_PREFIX_GAUGE: &str = "gauge.";
+
 const I64_MAX: u64 = i64::MAX as u64;
 
 #[derive(Default)]
@@ -31,6 +36,12 @@ pub(crate) struct Instruments {
     f64_up_down_counter: MetricsMap<UpDownCounter<f64>>,
     u64_histogram: MetricsMap<Histogram<u64>>,
     f64_histogram: MetricsMap<Histogram<f64>>,
+    #[cfg(feature="otel_unstable")]
+    u64_gauge: MetricsMap<Gauge<u64>>,
+    #[cfg(feature="otel_unstable")]
+    f64_gauge: MetricsMap<Gauge<f64>>,
+    #[cfg(feature="otel_unstable")]
+    i64_gauge: MetricsMap<Gauge<i64>>
 }
 
 type MetricsMap<T> = RwLock<HashMap<&'static str, T>>;
@@ -43,6 +54,12 @@ pub(crate) enum InstrumentType {
     UpDownCounterF64(f64),
     HistogramU64(u64),
     HistogramF64(f64),
+    #[cfg(feature="otel_unstable")]
+    GaugeU64(u64),
+    #[cfg(feature="otel_unstable")]
+    GaugeF64(f64),
+    #[cfg(feature="otel_unstable")]
+    GaugeI64(i64),
 }
 
 impl Instruments {
@@ -125,6 +142,34 @@ impl Instruments {
                     |rec| rec.record(value, attributes),
                 );
             }
+            #[cfg(feature="otel_unstable")]
+            InstrumentType::GaugeF64(value) => {
+                update_or_insert(
+                    &self.f64_gauge,
+                    metric_name,
+                    || meter.f64_gauge(metric_name).init(),
+                    |rec| rec.record(value, attributes),
+                );
+            }
+            #[cfg(feature="otel_unstable")]
+            InstrumentType::GaugeU64(value) => {
+                update_or_insert(
+                    &self.u64_gauge,
+                    metric_name,
+                    || meter.u64_gauge(metric_name).init(),
+                    |rec| rec.record(value, attributes),
+                );
+            }
+            #[cfg(feature="otel_unstable")]
+            InstrumentType::GaugeI64(value) => {
+                update_or_insert(
+                    &self.i64_gauge,
+                    metric_name,
+                    || meter.i64_gauge(metric_name).init(),
+                    |rec| rec.record(value, attributes),
+                );
+            }
+
         };
     }
 }
@@ -141,13 +186,20 @@ impl<'a> Visit for MetricVisitor<'a> {
     }
 
     fn record_u64(&mut self, field: &Field, value: u64) {
+        #[cfg(feature="otel_unstable")]
+        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_GAUGE) {
+            self.visited_metrics
+                .push((metric_name, InstrumentType::GaugeU64(value)));
+            return;
+        }
         if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_MONOTONIC_COUNTER) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::CounterU64(value)));
-        } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
+            return;
+        }
+        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
             if value <= I64_MAX {
-                self.visited_metrics
-                    .push((metric_name, InstrumentType::UpDownCounterI64(value as i64)));
+                self.visited_metrics.push((metric_name, InstrumentType::UpDownCounterI64(value as i64)));
             } else {
                 eprintln!(
                     "[tracing-opentelemetry]: Received Counter metric, but \
@@ -156,41 +208,64 @@ impl<'a> Visit for MetricVisitor<'a> {
                     value
                 );
             }
-        } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_HISTOGRAM) {
+            return;
+        }
+        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_HISTOGRAM) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::HistogramU64(value)));
-        } else if value <= I64_MAX {
-            self.attributes
-                .push(KeyValue::new(field.name(), Value::I64(value as i64)));
+            return;
+        }
+
+        if value <= I64_MAX {
+            self.attributes.push(KeyValue::new(field.name(), Value::I64(value as i64)));
         }
     }
 
     fn record_f64(&mut self, field: &Field, value: f64) {
+        #[cfg(feature="otel_unstable")]
+        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_GAUGE) {
+            self.visited_metrics
+                .push((metric_name, InstrumentType::GaugeF64(value)));
+            return;
+        } 
         if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_MONOTONIC_COUNTER) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::CounterF64(value)));
-        } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
+            return;
+        } 
+        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::UpDownCounterF64(value)));
-        } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_HISTOGRAM) {
+            return;
+        } 
+        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_HISTOGRAM) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::HistogramF64(value)));
-        } else {
-            self.attributes
-                .push(KeyValue::new(field.name(), Value::F64(value)));
+            return;
         }
+
+        self.attributes.push(KeyValue::new(field.name(), Value::F64(value)));
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
+        #[cfg(feature="otel_unstable")]
+        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_GAUGE) {
+            self.visited_metrics
+                .push((metric_name, InstrumentType::GaugeI64(value)));
+            return;
+        }
         if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_MONOTONIC_COUNTER) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::CounterU64(value as u64)));
-        } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
+            return;
+        }
+        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::UpDownCounterI64(value)));
-        } else {
-            self.attributes.push(KeyValue::new(field.name(), value));
+            return;
         }
+
+        self.attributes.push(KeyValue::new(field.name(), value));
     }
 
     fn record_str(&mut self, field: &Field, value: &str) {
@@ -358,9 +433,19 @@ impl MetricsFilter {
         meta.is_event()
             && meta.fields().iter().any(|field| {
                 let name = field.name();
-                name.starts_with(METRIC_PREFIX_COUNTER)
-                    || name.starts_with(METRIC_PREFIX_MONOTONIC_COUNTER)
-                    || name.starts_with(METRIC_PREFIX_HISTOGRAM)
+
+                if name.starts_with(METRIC_PREFIX_COUNTER)
+                || name.starts_with(METRIC_PREFIX_MONOTONIC_COUNTER)
+                || name.starts_with(METRIC_PREFIX_HISTOGRAM) {
+                    return true;
+                }
+                
+                #[cfg(feature="otel_unstable")]
+                if name.starts_with(METRIC_PREFIX_GAUGE) {
+                    return true;
+                }
+
+                false
             })
     }
 }
