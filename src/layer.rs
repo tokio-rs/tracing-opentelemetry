@@ -970,12 +970,16 @@ where
     }
 
     fn on_exit(&self, id: &span::Id, ctx: Context<'_, S>) {
+        let span = ctx.span(id).expect("Span not found, this is a bug");
+        let mut extensions = span.extensions_mut();
+
+        if let Some(otel_data) = extensions.get_mut::<OtelData>() {
+            otel_data.builder.end_time = Some(crate::time::now());
+        }
+
         if !self.tracked_inactivity {
             return;
         }
-
-        let span = ctx.span(id).expect("Span not found, this is a bug");
-        let mut extensions = span.extensions_mut();
 
         if let Some(timings) = extensions.get_mut::<Timings>() {
             let now = Instant::now();
@@ -1165,9 +1169,7 @@ where
             }
 
             // Assign end time, build and start span, drop span to export
-            builder
-                .with_end_time(crate::time::now())
-                .start_with_context(&self.tracer, &parent_cx);
+            builder.start_with_context(&self.tracer, &parent_cx);
         }
     }
 
