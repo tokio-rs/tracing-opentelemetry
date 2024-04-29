@@ -106,10 +106,10 @@ tracing-subscriber = "0.3"
 
 ```console
 # Run a supported collector like jaeger in the background
-$ docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
+$ docker run -d -p4317:4317 -p16686:16686 jaegertracing/all-in-one:latest
 
 # Run example to produce spans (from parent examples directory)
-$ cargo run --example opentelemetry
+$ cargo run --example opentelemetry-otlp
 
 # View spans (see the image below)
 $ firefox http://localhost:16686/
