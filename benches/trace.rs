@@ -10,6 +10,65 @@ use std::time::SystemTime;
 use tracing::{trace, trace_span};
 use tracing_subscriber::prelude::*;
 
+fn many_enters(c: &mut Criterion) {
+    let mut group = c.benchmark_group("otel_many_enters");
+
+    group.bench_function("spec_baseline", |b| {
+        let provider = TracerProvider::default();
+        let tracer = provider.tracer("bench");
+        b.iter(|| {
+            fn dummy(tracer: &Tracer, cx: &Context) {
+                let mut span = tracer.start_with_context("child", cx);
+                for _ in 0..1000 {
+                    span.add_event("name", Vec::new());
+                }
+            }
+
+            tracer.in_span("parent", |cx| dummy(&tracer, &cx));
+        });
+    });
+
+    {
+        let _subscriber = tracing_subscriber::registry()
+            .with(RegistryAccessLayer)
+            .set_default();
+        group.bench_function("no_data_baseline", |b| b.iter(enters_harness));
+    }
+
+    {
+        let _subscriber = tracing_subscriber::registry()
+            .with(OtelDataLayer)
+            .set_default();
+        group.bench_function("data_only_baseline", |b| b.iter(enters_harness));
+    }
+
+    {
+        let provider = TracerProvider::default();
+        let tracer = provider.tracer("bench");
+        let otel_layer = tracing_opentelemetry::layer()
+            .with_tracer(tracer)
+            .with_tracked_inactivity(false);
+        let _subscriber = tracing_subscriber::registry()
+            .with(otel_layer)
+            .set_default();
+
+        group.bench_function("full_without_timings", |b| b.iter(enters_harness));
+    }
+
+    {
+        let provider = TracerProvider::default();
+        let tracer = provider.tracer("bench");
+        let otel_layer = tracing_opentelemetry::layer()
+            .with_tracer(tracer)
+            .with_tracked_inactivity(true);
+        let _subscriber = tracing_subscriber::registry()
+            .with(otel_layer)
+            .set_default();
+
+        group.bench_function("full_with_timings", |b| b.iter(enters_harness));
+    }
+}
+
 fn many_children(c: &mut Criterion) {
     let mut group = c.benchmark_group("otel_many_children");
 
@@ -231,6 +290,14 @@ fn tracing_harness() {
     dummy();
 }
 
+fn enters_harness() {
+    let span = trace_span!("span");
+    for _ in 0..1000 {
+        let guard = span.enter();
+        _ = criterion::black_box(guard)
+    }
+}
+
 fn events_harness() {
     fn dummy() {
         let _child = trace_span!("child").entered();
@@ -249,12 +316,12 @@ fn events_harness() {
 criterion_group! {
     name = benches;
     config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
-    targets = many_children, many_events
+    targets = many_enters, many_children, many_events
 }
 #[cfg(target_os = "windows")]
 criterion_group! {
     name = benches;
     config = Criterion::default();
-    targets = many_children, many_events
+    targets = many_enters, many_children, many_events
 }
 criterion_main!(benches);
