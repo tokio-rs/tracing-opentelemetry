@@ -115,49 +115,55 @@ async fn f64_up_down_counter_is_exported() {
     exporter.export().unwrap();
 }
 
+#[cfg(feature = "otel_unstable")]
 #[tokio::test]
 async fn u64_gauge_is_exported() {
     let (subscriber, exporter) = init_subscriber(
         "gygygy".to_string(),
         InstrumentKind::Gauge,
-        1_u64,
+        2_u64,
         None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(gauge.gygygy = 1_u64);
+        tracing::info!(gauge.gygygy = 2_u64);
     });
 
     exporter.export().unwrap();
 }
 
+#[cfg(feature = "otel_unstable")]
 #[tokio::test]
 async fn f64_gauge_is_exported() {
     let (subscriber, exporter) = init_subscriber(
         "huitt".to_string(),
         InstrumentKind::Gauge,
-        1_f64,
+        2_f64,
         None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(gauge.huitt = 1_f64);
+        tracing::info!(gauge.huitt = 2_f64);
     });
 
     exporter.export().unwrap();
 }
 
+#[cfg(feature = "otel_unstable")]
 #[tokio::test]
 async fn i64_gauge_is_exported() {
     let (subscriber, exporter) = init_subscriber(
         "samsagaz".to_string(),
         InstrumentKind::Gauge,
-        1_i64,
+        2_i64,
         None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(gauge.samsagaz = 1_i64);
+        tracing::info!(gauge.samsagaz = 2_i64);
     });
 
     exporter.export().unwrap();
@@ -323,11 +329,12 @@ async fn f64_up_down_counter_with_attributes_is_exported() {
     exporter.export().unwrap();
 }
 
+#[cfg(feature = "otel_unstable")]
 #[tokio::test]
 async fn f64_gauge_with_attributes_is_exported() {
     let (subscriber, exporter) = init_subscriber(
         "hello_world".to_string(),
-        InstrumentKind::Counter,
+        InstrumentKind::Gauge,
         1_f64,
         Some(AttributeSet::from(
             [
@@ -355,11 +362,12 @@ async fn f64_gauge_with_attributes_is_exported() {
     exporter.export().unwrap();
 }
 
+#[cfg(feature = "otel_unstable")]
 #[tokio::test]
 async fn u64_gauge_with_attributes_is_exported() {
     let (subscriber, exporter) = init_subscriber(
         "hello_world".to_string(),
-        InstrumentKind::Counter,
+        InstrumentKind::Gauge,
         1_u64,
         Some(AttributeSet::from(
             [
@@ -387,11 +395,12 @@ async fn u64_gauge_with_attributes_is_exported() {
     exporter.export().unwrap();
 }
 
+#[cfg(feature = "otel_unstable")]
 #[tokio::test]
 async fn i64_gauge_with_attributes_is_exported() {
     let (subscriber, exporter) = init_subscriber(
         "hello_world".to_string(),
-        InstrumentKind::Counter,
+        InstrumentKind::Gauge,
         1_i64,
         Some(AttributeSet::from(
             [
@@ -668,7 +677,7 @@ where
                             gauge.data_points
                                 .iter()
                                 .map(|data_point| data_point.value)
-                                .sum()
+                                .last().unwrap()
                         );
 
                         if let Some(expected_attributes) = self.expected_attributes.as_ref() {
