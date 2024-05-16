@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     error::Error as StdError,
     fmt::{Debug, Display},
     io::Write,
@@ -60,12 +59,9 @@ fn double_failable_work(fail: bool) -> Result<&'static str, Error> {
 fn main() -> Result<(), Box<dyn StdError + Send + Sync + 'static>> {
     let builder = sdk::trace::TracerProvider::builder().with_simple_exporter(WriterExporter);
     let provider = builder.build();
-    let tracer = provider.versioned_tracer(
-        "opentelemetry-write-exporter",
-        None::<Cow<'static, str>>,
-        None::<Cow<'static, str>>,
-        None,
-    );
+    let tracer = provider
+        .tracer_builder("opentelemetry-write-exporter")
+        .build();
     global::set_tracer_provider(provider);
 
     let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
