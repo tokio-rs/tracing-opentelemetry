@@ -47,7 +47,7 @@ opentelemetry_sdk = { version = "0.22.0", default-features = false, features = [
 opentelemetry-jaeger = "0.21.0"
 opentelemetry-stdout = { version = "0.3.0", features = ["trace", "metrics"] }
 opentelemetry-otlp = { version = "0.15.0", features = ["metrics"] }
-opentelemetry-semantic-conventions = "0.14.0"
+opentelemetry-semantic-conventions = "0.15.0"
 futures-util = { version = "0.3.17", default-features = false }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
