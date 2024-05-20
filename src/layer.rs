@@ -1022,7 +1022,7 @@ where
                 .span()
                 .span_context()
                 .clone();
-            let follows_link = otel::Link::new(follows_context, Vec::new());
+            let follows_link = otel::Link::new(follows_context, Vec::new(), 0);
             if let Some(ref mut links) = data.builder.links {
                 links.push(follows_link);
             } else {
@@ -1212,7 +1212,7 @@ fn thread_id_integer(id: thread::ThreadId) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use opentelemetry::trace::TraceFlags;
+    use opentelemetry::trace::{SpanContext, TraceFlags};
     use std::{
         collections::HashMap,
         error::Error,
@@ -1290,6 +1290,7 @@ mod tests {
         fn set_attribute(&mut self, _attribute: KeyValue) {}
         fn set_status(&mut self, _status: otel::Status) {}
         fn update_name<T: Into<Cow<'static, str>>>(&mut self, _new_name: T) {}
+        fn add_link(&mut self, _span_context: SpanContext, _attributes: Vec<KeyValue>) {}
         fn end_with_timestamp(&mut self, _timestamp: SystemTime) {}
     }
 
