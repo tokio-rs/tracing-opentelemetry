@@ -1,3 +1,20 @@
+# 0.24.0 (May 24, 2024)
+
+### Breaking Changes
+
+- Upgrade to opentelemetry 0.23. Refer to the upstream
+  [changelog](https://github.com/open-telemetry/opentelemetry-rust/releases/tag/opentelemetry-0.23.0)
+  for more information.
+
+### Added
+
+- Added gauge metrics (#129)
+
+### Fixed
+
+- Fixed compilation on WASI targets (#147)
+- Set span end time when it exists (#124)
+
 # 0.23.0 (February 26, 2024)
 
 ### Breaking Changes
