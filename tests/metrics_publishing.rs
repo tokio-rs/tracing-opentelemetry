@@ -1,7 +1,7 @@
 use opentelemetry::{metrics::MetricsError, KeyValue};
 use opentelemetry_sdk::{
     metrics::{
-        data::{self, Histogram, Sum},
+        data::{self, Gauge, Histogram, Sum},
         reader::{
             AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
             MetricReader, TemporalitySelector,
@@ -110,6 +110,48 @@ async fn f64_up_down_counter_is_exported() {
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(counter.pebcak_blah = 99.123_f64);
+    });
+
+    exporter.export().unwrap();
+}
+
+#[cfg(feature = "metrics_gauge_unstable")]
+#[tokio::test]
+async fn u64_gauge_is_exported() {
+    let (subscriber, exporter) =
+        init_subscriber("gygygy".to_string(), InstrumentKind::Gauge, 2_u64, None);
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(gauge.gygygy = 1_u64);
+        tracing::info!(gauge.gygygy = 2_u64);
+    });
+
+    exporter.export().unwrap();
+}
+
+#[cfg(feature = "metrics_gauge_unstable")]
+#[tokio::test]
+async fn f64_gauge_is_exported() {
+    let (subscriber, exporter) =
+        init_subscriber("huitt".to_string(), InstrumentKind::Gauge, 2_f64, None);
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(gauge.huitt = 1_f64);
+        tracing::info!(gauge.huitt = 2_f64);
+    });
+
+    exporter.export().unwrap();
+}
+
+#[cfg(feature = "metrics_gauge_unstable")]
+#[tokio::test]
+async fn i64_gauge_is_exported() {
+    let (subscriber, exporter) =
+        init_subscriber("samsagaz".to_string(), InstrumentKind::Gauge, 2_i64, None);
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(gauge.samsagaz = 1_i64);
+        tracing::info!(gauge.samsagaz = 2_i64);
     });
 
     exporter.export().unwrap();
@@ -264,6 +306,105 @@ async fn f64_up_down_counter_with_attributes_is_exported() {
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(
             counter.hello_world = -1_f64,
+            u64_key_1 = 1_u64,
+            i64_key_1 = 2_i64,
+            f64_key_1 = 3_f64,
+            str_key_1 = "foo",
+            bool_key_1 = true,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
+#[cfg(feature = "metrics_gauge_unstable")]
+#[tokio::test]
+async fn f64_gauge_with_attributes_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Gauge,
+        1_f64,
+        Some(AttributeSet::from(
+            [
+                KeyValue::new("u64_key_1", 1_i64),
+                KeyValue::new("i64_key_1", 2_i64),
+                KeyValue::new("f64_key_1", 3_f64),
+                KeyValue::new("str_key_1", "foo"),
+                KeyValue::new("bool_key_1", true),
+            ]
+            .as_slice(),
+        )),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            gauge.hello_world = 1_f64,
+            u64_key_1 = 1_u64,
+            i64_key_1 = 2_i64,
+            f64_key_1 = 3_f64,
+            str_key_1 = "foo",
+            bool_key_1 = true,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
+#[cfg(feature = "metrics_gauge_unstable")]
+#[tokio::test]
+async fn u64_gauge_with_attributes_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Gauge,
+        1_u64,
+        Some(AttributeSet::from(
+            [
+                KeyValue::new("u64_key_1", 1_i64),
+                KeyValue::new("i64_key_1", 2_i64),
+                KeyValue::new("f64_key_1", 3_f64),
+                KeyValue::new("str_key_1", "foo"),
+                KeyValue::new("bool_key_1", true),
+            ]
+            .as_slice(),
+        )),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            gauge.hello_world = 1_u64,
+            u64_key_1 = 1_u64,
+            i64_key_1 = 2_i64,
+            f64_key_1 = 3_f64,
+            str_key_1 = "foo",
+            bool_key_1 = true,
+        );
+    });
+
+    exporter.export().unwrap();
+}
+
+#[cfg(feature = "metrics_gauge_unstable")]
+#[tokio::test]
+async fn i64_gauge_with_attributes_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Gauge,
+        1_i64,
+        Some(AttributeSet::from(
+            [
+                KeyValue::new("u64_key_1", 1_i64),
+                KeyValue::new("i64_key_1", 2_i64),
+                KeyValue::new("f64_key_1", 3_f64),
+                KeyValue::new("str_key_1", "foo"),
+                KeyValue::new("bool_key_1", true),
+            ]
+            .as_slice(),
+        )),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(
+            gauge.hello_world = 1_i64,
             u64_key_1 = 1_u64,
             i64_key_1 = 2_i64,
             f64_key_1 = 3_f64,
@@ -513,6 +654,24 @@ where
 
                         if let Some(expected_attributes) = self.expected_attributes.as_ref() {
                             sum.data_points.iter().for_each(|data_point| {
+                                assert_eq!(expected_attributes, &data_point.attributes,)
+                            });
+                        }
+                    }
+                    InstrumentKind::Gauge => {
+                        let gauge = metric.data.as_any().downcast_ref::<Gauge<T>>().unwrap();
+                        assert_eq!(
+                            self.expected_value,
+                            gauge
+                                .data_points
+                                .iter()
+                                .map(|data_point| data_point.value)
+                                .last()
+                                .unwrap()
+                        );
+
+                        if let Some(expected_attributes) = self.expected_attributes.as_ref() {
+                            gauge.data_points.iter().for_each(|data_point| {
                                 assert_eq!(expected_attributes, &data_point.attributes,)
                             });
                         }

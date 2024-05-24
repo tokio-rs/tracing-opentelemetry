@@ -135,7 +135,7 @@ jobs:
     - name: install cargo-nextest
       uses: taiki-e/install-action@nextest
     - name: Run tests
-      run: cargo nextest run --profile ci --workspace
+      run: cargo nextest run --profile ci --workspace --all-features
     # TODO(eliza): punt on this for now because the generated JUnit report is
     # missing some fields that this action needs to give good output.
     # - name: Publish Test Report
@@ -146,7 +146,7 @@ jobs:
     #     check_name: "cargo test (Rust ${{ matrix.rust }} on ${{ matrix.os }})"
     #     check_title_template: "{{SUITE_NAME}}::{{TEST_NAME}}"
     - name: Run doctests
-      run: cargo test --doc --workspace
+      run: cargo test --doc --workspace --all-features
 
   test-build-wasm:
     name: build tests (wasm)
@@ -158,7 +158,7 @@ jobs:
       with:
         target: wasm32-unknown-unknown
     - name: build all tests
-      run: cargo test --no-run
+      run: cargo test --no-run --all-features
 
   # all required checks except for the main test run (which we only require
   # specific matrix combinations from)
