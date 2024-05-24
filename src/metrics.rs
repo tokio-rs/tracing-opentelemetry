@@ -194,9 +194,7 @@ impl<'a> Visit for MetricVisitor<'a> {
         if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_MONOTONIC_COUNTER) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::CounterU64(value)));
-            return;
-        }
-        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
+        } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
             if value <= I64_MAX {
                 self.visited_metrics
                     .push((metric_name, InstrumentType::UpDownCounterI64(value as i64)));
@@ -208,15 +206,10 @@ impl<'a> Visit for MetricVisitor<'a> {
                     value
                 );
             }
-            return;
-        }
-        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_HISTOGRAM) {
+        } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_HISTOGRAM) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::HistogramU64(value)));
-            return;
-        }
-
-        if value <= I64_MAX {
+        } else if value <= I64_MAX {
             self.attributes
                 .push(KeyValue::new(field.name(), Value::I64(value as i64)));
         }
@@ -232,21 +225,16 @@ impl<'a> Visit for MetricVisitor<'a> {
         if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_MONOTONIC_COUNTER) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::CounterF64(value)));
-            return;
-        }
-        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
+        } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::UpDownCounterF64(value)));
-            return;
-        }
-        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_HISTOGRAM) {
+        } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_HISTOGRAM) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::HistogramF64(value)));
-            return;
+        } else {
+            self.attributes
+                .push(KeyValue::new(field.name(), Value::F64(value)));
         }
-
-        self.attributes
-            .push(KeyValue::new(field.name(), Value::F64(value)));
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
@@ -259,15 +247,12 @@ impl<'a> Visit for MetricVisitor<'a> {
         if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_MONOTONIC_COUNTER) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::CounterU64(value as u64)));
-            return;
-        }
-        if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
+        } else if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_COUNTER) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::UpDownCounterI64(value)));
-            return;
+        } else {
+            self.attributes.push(KeyValue::new(field.name(), value));
         }
-
-        self.attributes.push(KeyValue::new(field.name(), value));
     }
 
     fn record_str(&mut self, field: &Field, value: &str) {
