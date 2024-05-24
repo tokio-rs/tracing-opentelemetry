@@ -23,8 +23,8 @@ rust-version = "1.65.0"
 default = ["tracing-log", "metrics"]
 # Enables support for exporting OpenTelemetry metrics
 metrics = ["opentelemetry/metrics","opentelemetry_sdk/metrics", "smallvec"]
-# Enables support for unstable OpenTelemetry metric instruments
-otel_unstable = ["opentelemetry/otel_unstable"]
+# Enables experimental support for OpenTelemetry gauge metrics
+metrics_gauge_unstable = ["opentelemetry/otel_unstable"]
 
 [dependencies]
 opentelemetry = { version = "0.22.0", default-features = false, features = ["trace"] }

@@ -115,7 +115,7 @@ async fn f64_up_down_counter_is_exported() {
     exporter.export().unwrap();
 }
 
-#[cfg(feature = "otel_unstable")]
+#[cfg(feature = "metrics_gauge_unstable")]
 #[tokio::test]
 async fn u64_gauge_is_exported() {
     let (subscriber, exporter) =
@@ -129,7 +129,7 @@ async fn u64_gauge_is_exported() {
     exporter.export().unwrap();
 }
 
-#[cfg(feature = "otel_unstable")]
+#[cfg(feature = "metrics_gauge_unstable")]
 #[tokio::test]
 async fn f64_gauge_is_exported() {
     let (subscriber, exporter) =
@@ -143,7 +143,7 @@ async fn f64_gauge_is_exported() {
     exporter.export().unwrap();
 }
 
-#[cfg(feature = "otel_unstable")]
+#[cfg(feature = "metrics_gauge_unstable")]
 #[tokio::test]
 async fn i64_gauge_is_exported() {
     let (subscriber, exporter) =
@@ -317,7 +317,7 @@ async fn f64_up_down_counter_with_attributes_is_exported() {
     exporter.export().unwrap();
 }
 
-#[cfg(feature = "otel_unstable")]
+#[cfg(feature = "metrics_gauge_unstable")]
 #[tokio::test]
 async fn f64_gauge_with_attributes_is_exported() {
     let (subscriber, exporter) = init_subscriber(
@@ -350,7 +350,7 @@ async fn f64_gauge_with_attributes_is_exported() {
     exporter.export().unwrap();
 }
 
-#[cfg(feature = "otel_unstable")]
+#[cfg(feature = "metrics_gauge_unstable")]
 #[tokio::test]
 async fn u64_gauge_with_attributes_is_exported() {
     let (subscriber, exporter) = init_subscriber(
@@ -383,7 +383,7 @@ async fn u64_gauge_with_attributes_is_exported() {
     exporter.export().unwrap();
 }
 
-#[cfg(feature = "otel_unstable")]
+#[cfg(feature = "metrics_gauge_unstable")]
 #[tokio::test]
 async fn i64_gauge_with_attributes_is_exported() {
     let (subscriber, exporter) = init_subscriber(
