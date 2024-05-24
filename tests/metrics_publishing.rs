@@ -1,7 +1,7 @@
 use opentelemetry::{metrics::MetricsError, KeyValue};
 use opentelemetry_sdk::{
     metrics::{
-        data::{self, Histogram, Sum, Gauge},
+        data::{self, Gauge, Histogram, Sum},
         reader::{
             AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
             MetricReader, TemporalitySelector,
@@ -118,12 +118,8 @@ async fn f64_up_down_counter_is_exported() {
 #[cfg(feature = "otel_unstable")]
 #[tokio::test]
 async fn u64_gauge_is_exported() {
-    let (subscriber, exporter) = init_subscriber(
-        "gygygy".to_string(),
-        InstrumentKind::Gauge,
-        2_u64,
-        None,
-    );
+    let (subscriber, exporter) =
+        init_subscriber("gygygy".to_string(), InstrumentKind::Gauge, 2_u64, None);
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(gauge.gygygy = 1_u64);
@@ -136,12 +132,8 @@ async fn u64_gauge_is_exported() {
 #[cfg(feature = "otel_unstable")]
 #[tokio::test]
 async fn f64_gauge_is_exported() {
-    let (subscriber, exporter) = init_subscriber(
-        "huitt".to_string(),
-        InstrumentKind::Gauge,
-        2_f64,
-        None,
-    );
+    let (subscriber, exporter) =
+        init_subscriber("huitt".to_string(), InstrumentKind::Gauge, 2_f64, None);
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(gauge.huitt = 1_f64);
@@ -154,12 +146,8 @@ async fn f64_gauge_is_exported() {
 #[cfg(feature = "otel_unstable")]
 #[tokio::test]
 async fn i64_gauge_is_exported() {
-    let (subscriber, exporter) = init_subscriber(
-        "samsagaz".to_string(),
-        InstrumentKind::Gauge,
-        2_i64,
-        None,
-    );
+    let (subscriber, exporter) =
+        init_subscriber("samsagaz".to_string(), InstrumentKind::Gauge, 2_i64, None);
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(gauge.samsagaz = 1_i64);
@@ -674,10 +662,12 @@ where
                         let gauge = metric.data.as_any().downcast_ref::<Gauge<T>>().unwrap();
                         assert_eq!(
                             self.expected_value,
-                            gauge.data_points
+                            gauge
+                                .data_points
                                 .iter()
                                 .map(|data_point| data_point.value)
-                                .last().unwrap()
+                                .last()
+                                .unwrap()
                         );
 
                         if let Some(expected_attributes) = self.expected_attributes.as_ref() {
