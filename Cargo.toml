@@ -1,6 +1,6 @@
 [package]
 name = "tracing-opentelemetry"
-version = "0.23.0"
+version = "0.24.0"
 authors = [
     "Julian Tescher <julian@tescher.me>",
     "Tokio Contributors <team@tokio.rs>"
