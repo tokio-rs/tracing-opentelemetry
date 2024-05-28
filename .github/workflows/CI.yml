@@ -148,15 +148,18 @@ jobs:
     - name: Run doctests
       run: cargo test --doc --workspace --all-features
 
-  test-build-wasm:
-    name: build tests (wasm)
+  test-build-across-targets:
+    name: build tests (${{ matrix.target }})
     needs: check
+    strategy:
+      matrix:
+        target: [wasm32-unknown-unknown, wasm32-wasi]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
       with:
-        target: wasm32-unknown-unknown
+        target: ${{ matrix.target }}
     - name: build all tests
       run: cargo test --no-run --all-features
 
@@ -169,7 +172,7 @@ jobs:
       - style
       - cargo-hack
       - check-msrv
-      - test-build-wasm
+      - test-build-across-targets
       - test
     steps:
       - run: exit 0
