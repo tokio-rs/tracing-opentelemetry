@@ -7,7 +7,7 @@ use opentelemetry::{
 use std::fmt;
 use std::marker;
 use std::thread;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(all(target_arch = "wasm32", not(target_os = "wasi"))))]
 use std::time::Instant;
 use std::{any::TypeId, borrow::Cow};
 use tracing_core::span::{self, Attributes, Id, Record};
@@ -17,7 +17,7 @@ use tracing_log::NormalizeEvent;
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::Layer;
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 use web_time::Instant;
 
 const SPAN_NAME_FIELD: &str = "otel.name";
