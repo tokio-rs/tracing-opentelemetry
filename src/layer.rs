@@ -1168,7 +1168,7 @@ where
                 }
             }
 
-            // Assign end time, build and start span, drop span to export
+            // Build and start span, drop span to export
             builder.start_with_context(&self.tracer, &parent_cx);
         }
     }
