@@ -108,8 +108,7 @@ fn sampling_decision_respects_new_parent() {
     let provider = TracerProvider::builder()
         .with_simple_exporter(exporter.clone())
         .with_config(
-            Config::default()
-                .with_sampler(Sampler::ParentBased(Box::new(Sampler::AlwaysOff)))
+            Config::default().with_sampler(Sampler::ParentBased(Box::new(Sampler::AlwaysOff))),
         )
         .build();
     let tracer = provider.tracer("test");
@@ -134,7 +133,10 @@ fn sampling_decision_respects_new_parent() {
     // assert new parent-based sampling decision
     let spans = exporter.0.lock().unwrap();
     assert_eq!(spans.len(), 2, "Expected 2 spans, got {}", spans.len());
-    assert!(spans[0].span_context.is_sampled(), "Root span should be sampled");
+    assert!(
+        spans[0].span_context.is_sampled(),
+        "Root span should be sampled"
+    );
     assert_eq!(
         spans[1].span_context.is_sampled(),
         spans[0].span_context.is_sampled(),
