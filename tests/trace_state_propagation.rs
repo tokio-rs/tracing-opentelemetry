@@ -7,7 +7,7 @@ use opentelemetry::{
 use opentelemetry_sdk::{
     export::trace::{ExportResult, SpanData, SpanExporter},
     propagation::{BaggagePropagator, TraceContextPropagator},
-    trace::{Tracer, TracerProvider},
+    trace::{Config, Sampler, Tracer, TracerProvider},
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -99,6 +99,49 @@ fn inject_context_into_outgoing_requests() {
 
     // Ensure all values that should be passed between services are preserved
     assert_carrier_attrs_eq(&carrier, &outgoing_req_carrier);
+}
+
+#[test]
+fn sampling_decision_respects_new_parent() {
+    // custom setup required due to ParentBased(AlwaysOff) sampler
+    let exporter = TestExporter::default();
+    let provider = TracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .with_config(
+            Config::default().with_sampler(Sampler::ParentBased(Box::new(Sampler::AlwaysOff))),
+        )
+        .build();
+    let tracer = provider.tracer("test");
+    let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+
+    // set up remote sampled headers
+    let sampled_headers = HashMap::from([(
+        "traceparent".to_string(),
+        "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01".to_string(),
+    )]);
+    let remote_sampled_cx = TraceContextPropagator::new().extract(&sampled_headers);
+    let root_span = tracer.start_with_context("root_span", &remote_sampled_cx);
+
+    tracing::subscriber::with_default(subscriber, || {
+        let child = tracing::debug_span!("child");
+        child.context(); // force a sampling decision
+        child.set_parent(Context::current_with_span(root_span));
+    });
+
+    drop(provider); // flush all spans
+
+    // assert new parent-based sampling decision
+    let spans = exporter.0.lock().unwrap();
+    assert_eq!(spans.len(), 2, "Expected 2 spans, got {}", spans.len());
+    assert!(
+        spans[0].span_context.is_sampled(),
+        "Root span should be sampled"
+    );
+    assert_eq!(
+        spans[1].span_context.is_sampled(),
+        spans[0].span_context.is_sampled(),
+        "Child span should respect parent sampling decision"
+    );
 }
 
 fn assert_shared_attrs_eq(sc_a: &SpanContext, sc_b: &SpanContext) {
