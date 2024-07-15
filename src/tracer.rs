@@ -6,7 +6,7 @@ use opentelemetry::{
     },
     Context as OtelContext,
 };
-use opentelemetry_sdk::trace::{Tracer as SdkTracer, TracerProvider as SdkTracerProvider};
+use opentelemetry_sdk::trace::{IdGenerator, Tracer as SdkTracer};
 
 /// An interface for authors of OpenTelemetry SDKs to build pre-sampled tracers.
 ///
@@ -65,21 +65,18 @@ impl PreSampledTracer for noop::NoopTracer {
 
 impl PreSampledTracer for SdkTracer {
     fn sampled_context(&self, data: &mut crate::OtelData) -> OtelContext {
-        // Ensure tracing pipeline is still installed.
-        let Some(provider) = self.provider() else {
-            return OtelContext::new();
-        };
         let parent_cx = &data.parent_cx;
         let builder = &mut data.builder;
 
         // Gather trace state
-        let (trace_id, parent_trace_flags) = current_trace_state(builder, parent_cx, &provider);
+        let (trace_id, parent_trace_flags) =
+            current_trace_state(builder, parent_cx, self.id_generator());
 
         // Sample or defer to existing sampling decisions
         let (flags, trace_state) = if let Some(result) = &builder.sampling_result {
             process_sampling_result(result, parent_trace_flags)
         } else {
-            builder.sampling_result = Some(provider.config().sampler.should_sample(
+            builder.sampling_result = Some(self.should_sample().should_sample(
                 Some(parent_cx),
                 trace_id,
                 &builder.name,
@@ -101,22 +98,18 @@ impl PreSampledTracer for SdkTracer {
     }
 
     fn new_trace_id(&self) -> otel::TraceId {
-        self.provider()
-            .map(|provider| provider.config().id_generator.new_trace_id())
-            .unwrap_or(otel::TraceId::INVALID)
+        self.id_generator().new_trace_id()
     }
 
     fn new_span_id(&self) -> otel::SpanId {
-        self.provider()
-            .map(|provider| provider.config().id_generator.new_span_id())
-            .unwrap_or(otel::SpanId::INVALID)
+        self.id_generator().new_span_id()
     }
 }
 
 fn current_trace_state(
     builder: &SpanBuilder,
     parent_cx: &OtelContext,
-    provider: &SdkTracerProvider,
+    id_generator: &dyn IdGenerator,
 ) -> (TraceId, TraceFlags) {
     if parent_cx.has_active_span() {
         let span = parent_cx.span();
@@ -126,7 +119,7 @@ fn current_trace_state(
         (
             builder
                 .trace_id
-                .unwrap_or_else(|| provider.config().id_generator.new_trace_id()),
+                .unwrap_or_else(|| id_generator.new_trace_id()),
             Default::default(),
         )
     }
@@ -159,7 +152,7 @@ mod tests {
     use super::*;
     use crate::OtelData;
     use opentelemetry::trace::TracerProvider as _;
-    use opentelemetry_sdk::trace::{config, Sampler, TracerProvider};
+    use opentelemetry_sdk::trace::{Config, Sampler, TracerProvider};
 
     #[test]
     fn assigns_default_trace_id_if_missing() {
@@ -203,7 +196,7 @@ mod tests {
     fn sampled_context() {
         for (name, sampler, parent_cx, previous_sampling_result, is_sampled) in sampler_data() {
             let provider = TracerProvider::builder()
-                .with_config(config().with_sampler(sampler))
+                .with_config(Config::default().with_sampler(sampler))
                 .build();
             let tracer = provider.tracer("test");
             let mut builder = SpanBuilder::from_name("parent".to_string());
