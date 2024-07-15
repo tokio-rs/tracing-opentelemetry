@@ -3,7 +3,7 @@ use opentelemetry::{
     trace::{Span, SpanBuilder, Tracer as _, TracerProvider as _},
     Context,
 };
-use opentelemetry_sdk::trace::{Config, SpanLimits, Tracer, TracerProvider};
+use opentelemetry_sdk::trace::{Config, Tracer, TracerProvider};
 #[cfg(not(target_os = "windows"))]
 use pprof::criterion::{Output, PProfProfiler};
 use std::time::SystemTime;
@@ -160,15 +160,10 @@ fn many_events(c: &mut Criterion) {
     }
 
     {
-        let provider = TracerProvider::builder()
-            .with_config(Config {
-                span_limits: SpanLimits {
-                    max_events_per_span: 1000,
-                    ..SpanLimits::default()
-                },
-                ..Config::default()
-            })
-            .build();
+        let mut config = Config::default();
+        config.span_limits.max_events_per_span = 1000;
+
+        let provider = TracerProvider::builder().with_config(config).build();
         let tracer = provider.tracer("bench");
         let otel_layer = tracing_opentelemetry::layer()
             .with_tracer(tracer)

@@ -516,13 +516,18 @@ where
     /// ```no_run
     /// use tracing_opentelemetry::OpenTelemetryLayer;
     /// use tracing_subscriber::layer::SubscriberExt;
+    /// use opentelemetry::trace::TracerProvider;
     /// use tracing_subscriber::Registry;
     ///
-    /// // Create a jaeger exporter pipeline for a `trace_demo` service.
-    /// let tracer = opentelemetry_jaeger::new_agent_pipeline()
-    ///     .with_service_name("trace_demo")
+    /// // Create an OTLP pipeline exporter for a `trace_demo` service.
+    ///
+    /// let otlp_exporter = opentelemetry_otlp::new_exporter().tonic();
+    /// let tracer = opentelemetry_otlp::new_pipeline()
+    ///     .tracing()
+    ///     .with_exporter(otlp_exporter)
     ///     .install_simple()
-    ///     .expect("Error initializing Jaeger exporter");
+    ///     .unwrap()
+    ///     .tracer("trace_demo");
     ///
     /// // Create a layer with the configured tracer
     /// let otel_layer = OpenTelemetryLayer::new(tracer);
@@ -561,12 +566,17 @@ where
     /// ```no_run
     /// use tracing_subscriber::layer::SubscriberExt;
     /// use tracing_subscriber::Registry;
+    /// use opentelemetry::trace::TracerProvider;
     ///
-    /// // Create a jaeger exporter pipeline for a `trace_demo` service.
-    /// let tracer = opentelemetry_jaeger::new_agent_pipeline()
-    ///     .with_service_name("trace_demo")
+    /// // Create an OTLP pipeline exporter for a `trace_demo` service.
+    ///
+    /// let otlp_exporter = opentelemetry_otlp::new_exporter().tonic();
+    /// let tracer = opentelemetry_otlp::new_pipeline()
+    ///     .tracing()
+    ///     .with_exporter(otlp_exporter)
     ///     .install_simple()
-    ///     .expect("Error initializing Jaeger exporter");
+    ///     .unwrap()
+    ///     .tracer("trace_demo");
     ///
     /// // Create a layer with the configured tracer
     /// let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);

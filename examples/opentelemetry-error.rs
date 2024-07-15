@@ -141,8 +141,8 @@ impl Display for SpanData {
                 .as_secs()
         )?;
         writeln!(f, "- Resource:")?;
-        for (k, v) in self.0.resource.iter() {
-            writeln!(f, "  - {}: {}", k, v)?;
+        for kv in self.0.attributes.iter() {
+            writeln!(f, "  - {}: {}", kv.key, kv.value)?;
         }
         writeln!(f, "- Attributes:")?;
         for kv in self.0.attributes.iter() {

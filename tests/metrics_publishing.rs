@@ -6,9 +6,9 @@ use opentelemetry_sdk::{
             AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
             MetricReader, TemporalitySelector,
         },
-        InstrumentKind, ManualReader, MeterProviderBuilder, SdkMeterProvider,
+        AttributeSet, InstrumentKind, ManualReader, MeterProviderBuilder, SdkMeterProvider,
     },
-    AttributeSet, Resource,
+    Resource,
 };
 
 use std::{fmt::Debug, sync::Arc};
@@ -563,7 +563,12 @@ fn init_subscriber<T>(
         expected_metric_name,
         expected_instrument_kind,
         expected_value,
-        expected_attributes,
+        expected_attributes: expected_attributes.map(|attrs| {
+            attrs
+                .iter()
+                .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
+                .collect()
+        }),
         reader,
         _meter_provider: provider.clone(),
     };
@@ -613,7 +618,7 @@ struct TestExporter<T> {
     expected_metric_name: String,
     expected_instrument_kind: InstrumentKind,
     expected_value: T,
-    expected_attributes: Option<AttributeSet>,
+    expected_attributes: Option<Vec<KeyValue>>,
     reader: TestReader,
     _meter_provider: SdkMeterProvider,
 }
@@ -654,7 +659,7 @@ where
 
                         if let Some(expected_attributes) = self.expected_attributes.as_ref() {
                             sum.data_points.iter().for_each(|data_point| {
-                                assert_eq!(expected_attributes, &data_point.attributes,)
+                                assert_eq!(expected_attributes, &data_point.attributes)
                             });
                         }
                     }
@@ -672,7 +677,7 @@ where
 
                         if let Some(expected_attributes) = self.expected_attributes.as_ref() {
                             gauge.data_points.iter().for_each(|data_point| {
-                                assert_eq!(expected_attributes, &data_point.attributes,)
+                                assert_eq!(expected_attributes, &data_point.attributes)
                             });
                         }
                     }

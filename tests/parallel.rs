@@ -32,18 +32,18 @@ fn test_tracer() -> (
     impl Subscriber + Clone,
 ) {
     let exporter = TestExporter::default();
+    let mut config = Config::default();
+    config.span_limits = SpanLimits {
+        max_events_per_span: u32::MAX,
+        ..SpanLimits::default()
+    };
+
     let provider = TracerProvider::builder()
         .with_simple_exporter(exporter.clone())
-        .with_config(Config {
-            span_limits: SpanLimits {
-                max_events_per_span: u32::MAX,
-                ..SpanLimits::default()
-            },
-            ..Config::default()
-        })
+        .with_config(config)
         .build();
-    let tracer = provider.tracer("test");
 
+    let tracer = provider.tracer("test");
     let subscriber = tracing_subscriber::registry()
         .with(
             layer()
