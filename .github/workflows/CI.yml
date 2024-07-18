@@ -103,7 +103,6 @@ jobs:
     - name: install cargo-minimal-versions
       uses: taiki-e/install-action@cargo-minimal-versions
     - name: cargo minimal-versions check
-      working-directory: ${{ matrix.subcrate }}
       run: cargo minimal-versions check --feature-powerset --no-dev-deps
 
   ### test jobs #############################################################
