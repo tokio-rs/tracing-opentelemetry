@@ -606,35 +606,6 @@ where
     ///
     /// [conv]: https://github.com/open-telemetry/semantic-conventions/tree/main/docs/exceptions/
     /// [impls]: https://docs.rs/tracing/0.1.37/tracing/trait.Value.html#foreign-impls
-    #[deprecated(
-        since = "0.21.0",
-        note = "renamed to `OpenTelemetryLayer::with_error_fields_to_exceptions`"
-    )]
-    pub fn with_exception_fields(self, exception_fields: bool) -> Self {
-        Self {
-            sem_conv_config: SemConvConfig {
-                error_fields_to_exceptions: exception_fields,
-                ..self.sem_conv_config
-            },
-            ..self
-        }
-    }
-
-    /// Sets whether or not span and event metadata should include OpenTelemetry
-    /// exception fields such as `exception.message` and `exception.backtrace`
-    /// when an `Error` value is recorded. If multiple error values are recorded
-    /// on the same span/event, only the most recently recorded error value will
-    /// show up under these fields.
-    ///
-    /// These attributes follow the [OpenTelemetry semantic conventions for
-    /// exceptions][conv].
-    ///
-    /// By default, these attributes are recorded.
-    /// Note that this only works for `(dyn Error + 'static)`.
-    /// See [Implementations on Foreign Types of tracing::Value][impls] or [`OpenTelemetryLayer::with_error_events_to_exceptions`]
-    ///
-    /// [conv]: https://github.com/open-telemetry/semantic-conventions/tree/main/docs/exceptions/
-    /// [impls]: https://docs.rs/tracing/0.1.37/tracing/trait.Value.html#foreign-impls
     pub fn with_error_fields_to_exceptions(self, error_fields_to_exceptions: bool) -> Self {
         Self {
             sem_conv_config: SemConvConfig {
@@ -695,35 +666,6 @@ where
     ///
     /// [conv]: https://github.com/open-telemetry/semantic-conventions/tree/main/docs/exceptions/
     /// [impls]: https://docs.rs/tracing/0.1.37/tracing/trait.Value.html#foreign-impls
-    #[deprecated(
-        since = "0.21.0",
-        note = "renamed to `OpenTelemetryLayer::with_error_records_to_exceptions`"
-    )]
-    pub fn with_exception_field_propagation(self, exception_field_propagation: bool) -> Self {
-        Self {
-            sem_conv_config: SemConvConfig {
-                error_records_to_exceptions: exception_field_propagation,
-                ..self.sem_conv_config
-            },
-            ..self
-        }
-    }
-
-    /// Sets whether or not reporting an `Error` value on an event will
-    /// propagate the OpenTelemetry exception fields such as `exception.message`
-    /// and `exception.backtrace` to the corresponding span. You do not need to
-    /// enable `with_exception_fields` in order to enable this. If multiple
-    /// error values are recorded on the same span/event, only the most recently
-    /// recorded error value will show up under these fields.
-    ///
-    /// These attributes follow the [OpenTelemetry semantic conventions for
-    /// exceptions][conv].
-    ///
-    /// By default, these attributes are propagated to the span. Note that this only works for `(dyn Error + 'static)`.
-    /// See [Implementations on Foreign Types of tracing::Value][impls] or [`OpenTelemetryLayer::with_error_events_to_exceptions`]
-    ///
-    /// [conv]: https://github.com/open-telemetry/semantic-conventions/tree/main/docs/exceptions/
-    /// [impls]: https://docs.rs/tracing/0.1.37/tracing/trait.Value.html#foreign-impls
     pub fn with_error_records_to_exceptions(self, error_records_to_exceptions: bool) -> Self {
         Self {
             sem_conv_config: SemConvConfig {
@@ -745,26 +687,6 @@ where
     /// [conv]: https://github.com/open-telemetry/semantic-conventions/blob/main/docs/general/attributes.md#source-code-attributes/
     pub fn with_location(self, location: bool) -> Self {
         Self { location, ..self }
-    }
-
-    /// Sets whether or not span and event metadata should include OpenTelemetry
-    /// attributes with location information, such as the file, module and line number.
-    ///
-    /// These attributes follow the [OpenTelemetry semantic conventions for
-    /// source locations][conv].
-    ///
-    /// By default, locations are enabled.
-    ///
-    /// [conv]: https://github.com/open-telemetry/semantic-conventions/blob/main/docs/general/attributes.md#source-code-attributes/
-    #[deprecated(
-        since = "0.17.3",
-        note = "renamed to `OpenTelemetrySubscriber::with_location`"
-    )]
-    pub fn with_event_location(self, event_location: bool) -> Self {
-        Self {
-            location: event_location,
-            ..self
-        }
     }
 
     /// Sets whether or not spans metadata should include the _busy time_
