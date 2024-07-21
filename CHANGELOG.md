@@ -1,3 +1,16 @@
+# 0.25.0 (July 21, 2024)
+
+### Breaking Changes
+
+- Upgrade to opentelemetry 0.24. Refer to the upstream
+  [changelog](https://github.com/open-telemetry/opentelemetry-rust/releases/tag/opentelemetry-0.24.0)
+  for more information.
+
+### Fixed
+
+- Invalidate sample decision on set parent (#153)
+- chore: fix on_close() comment (#148)
+
 # 0.24.0 (May 24, 2024)
 
 ### Breaking Changes
