@@ -1,6 +1,6 @@
 [package]
 name = "tracing-opentelemetry"
-version = "0.25.0"
+version = "0.26.0"
 description = "OpenTelemetry integration for tracing"
 homepage = "https://github.com/tokio-rs/tracing-opentelemetry"
 repository = "https://github.com/tokio-rs/tracing-opentelemetry"
