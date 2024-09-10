@@ -6,7 +6,7 @@ use opentelemetry_sdk::{
             AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
             MetricReader, TemporalitySelector,
         },
-        AttributeSet, InstrumentKind, ManualReader, MeterProviderBuilder, SdkMeterProvider,
+        InstrumentKind, ManualReader, MeterProviderBuilder, SdkMeterProvider,
     },
     Resource,
 };
@@ -195,16 +195,13 @@ async fn u64_counter_with_attributes_is_exported() {
         "hello_world".to_string(),
         InstrumentKind::Counter,
         1_u64,
-        Some(AttributeSet::from(
-            [
-                KeyValue::new("u64_key_1", 1_i64),
-                KeyValue::new("i64_key_1", 2_i64),
-                KeyValue::new("f64_key_1", 3_f64),
-                KeyValue::new("str_key_1", "foo"),
-                KeyValue::new("bool_key_1", true),
-            ]
-            .as_slice(),
-        )),
+        Some(vec![
+            KeyValue::new("u64_key_1", 1_i64),
+            KeyValue::new("i64_key_1", 2_i64),
+            KeyValue::new("f64_key_1", 3_f64),
+            KeyValue::new("str_key_1", "foo"),
+            KeyValue::new("bool_key_1", true),
+        ]),
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -227,16 +224,13 @@ async fn f64_counter_with_attributes_is_exported() {
         "hello_world".to_string(),
         InstrumentKind::Counter,
         1_f64,
-        Some(AttributeSet::from(
-            [
-                KeyValue::new("u64_key_1", 1_i64),
-                KeyValue::new("i64_key_1", 2_i64),
-                KeyValue::new("f64_key_1", 3_f64),
-                KeyValue::new("str_key_1", "foo"),
-                KeyValue::new("bool_key_1", true),
-            ]
-            .as_slice(),
-        )),
+        Some(vec![
+            KeyValue::new("u64_key_1", 1_i64),
+            KeyValue::new("i64_key_1", 2_i64),
+            KeyValue::new("f64_key_1", 3_f64),
+            KeyValue::new("str_key_1", "foo"),
+            KeyValue::new("bool_key_1", true),
+        ]),
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -259,16 +253,13 @@ async fn i64_up_down_counter_with_attributes_is_exported() {
         "hello_world".to_string(),
         InstrumentKind::UpDownCounter,
         -1_i64,
-        Some(AttributeSet::from(
-            [
-                KeyValue::new("u64_key_1", 1_i64),
-                KeyValue::new("i64_key_1", 2_i64),
-                KeyValue::new("f64_key_1", 3_f64),
-                KeyValue::new("str_key_1", "foo"),
-                KeyValue::new("bool_key_1", true),
-            ]
-            .as_slice(),
-        )),
+        Some(vec![
+            KeyValue::new("u64_key_1", 1_i64),
+            KeyValue::new("i64_key_1", 2_i64),
+            KeyValue::new("f64_key_1", 3_f64),
+            KeyValue::new("str_key_1", "foo"),
+            KeyValue::new("bool_key_1", true),
+        ]),
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -291,16 +282,13 @@ async fn f64_up_down_counter_with_attributes_is_exported() {
         "hello_world".to_string(),
         InstrumentKind::UpDownCounter,
         -1_f64,
-        Some(AttributeSet::from(
-            [
-                KeyValue::new("u64_key_1", 1_i64),
-                KeyValue::new("i64_key_1", 2_i64),
-                KeyValue::new("f64_key_1", 3_f64),
-                KeyValue::new("str_key_1", "foo"),
-                KeyValue::new("bool_key_1", true),
-            ]
-            .as_slice(),
-        )),
+        Some(vec![
+            KeyValue::new("u64_key_1", 1_i64),
+            KeyValue::new("i64_key_1", 2_i64),
+            KeyValue::new("f64_key_1", 3_f64),
+            KeyValue::new("str_key_1", "foo"),
+            KeyValue::new("bool_key_1", true),
+        ]),
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -324,16 +312,13 @@ async fn f64_gauge_with_attributes_is_exported() {
         "hello_world".to_string(),
         InstrumentKind::Gauge,
         1_f64,
-        Some(AttributeSet::from(
-            [
-                KeyValue::new("u64_key_1", 1_i64),
-                KeyValue::new("i64_key_1", 2_i64),
-                KeyValue::new("f64_key_1", 3_f64),
-                KeyValue::new("str_key_1", "foo"),
-                KeyValue::new("bool_key_1", true),
-            ]
-            .as_slice(),
-        )),
+        Some(vec![
+            KeyValue::new("u64_key_1", 1_i64),
+            KeyValue::new("i64_key_1", 2_i64),
+            KeyValue::new("f64_key_1", 3_f64),
+            KeyValue::new("str_key_1", "foo"),
+            KeyValue::new("bool_key_1", true),
+        ]),
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -357,16 +342,13 @@ async fn u64_gauge_with_attributes_is_exported() {
         "hello_world".to_string(),
         InstrumentKind::Gauge,
         1_u64,
-        Some(AttributeSet::from(
-            [
-                KeyValue::new("u64_key_1", 1_i64),
-                KeyValue::new("i64_key_1", 2_i64),
-                KeyValue::new("f64_key_1", 3_f64),
-                KeyValue::new("str_key_1", "foo"),
-                KeyValue::new("bool_key_1", true),
-            ]
-            .as_slice(),
-        )),
+        Some(vec![
+            KeyValue::new("u64_key_1", 1_i64),
+            KeyValue::new("i64_key_1", 2_i64),
+            KeyValue::new("f64_key_1", 3_f64),
+            KeyValue::new("str_key_1", "foo"),
+            KeyValue::new("bool_key_1", true),
+        ]),
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -390,16 +372,13 @@ async fn i64_gauge_with_attributes_is_exported() {
         "hello_world".to_string(),
         InstrumentKind::Gauge,
         1_i64,
-        Some(AttributeSet::from(
-            [
-                KeyValue::new("u64_key_1", 1_i64),
-                KeyValue::new("i64_key_1", 2_i64),
-                KeyValue::new("f64_key_1", 3_f64),
-                KeyValue::new("str_key_1", "foo"),
-                KeyValue::new("bool_key_1", true),
-            ]
-            .as_slice(),
-        )),
+        Some(vec![
+            KeyValue::new("u64_key_1", 1_i64),
+            KeyValue::new("i64_key_1", 2_i64),
+            KeyValue::new("f64_key_1", 3_f64),
+            KeyValue::new("str_key_1", "foo"),
+            KeyValue::new("bool_key_1", true),
+        ]),
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -422,16 +401,13 @@ async fn u64_histogram_with_attributes_is_exported() {
         "hello_world".to_string(),
         InstrumentKind::Histogram,
         1_u64,
-        Some(AttributeSet::from(
-            [
-                KeyValue::new("u64_key_1", 1_i64),
-                KeyValue::new("i64_key_1", 2_i64),
-                KeyValue::new("f64_key_1", 3_f64),
-                KeyValue::new("str_key_1", "foo"),
-                KeyValue::new("bool_key_1", true),
-            ]
-            .as_slice(),
-        )),
+        Some(vec![
+            KeyValue::new("u64_key_1", 1_i64),
+            KeyValue::new("i64_key_1", 2_i64),
+            KeyValue::new("f64_key_1", 3_f64),
+            KeyValue::new("str_key_1", "foo"),
+            KeyValue::new("bool_key_1", true),
+        ]),
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -454,16 +430,13 @@ async fn f64_histogram_with_attributes_is_exported() {
         "hello_world".to_string(),
         InstrumentKind::Histogram,
         1_f64,
-        Some(AttributeSet::from(
-            [
-                KeyValue::new("u64_key_1", 1_i64),
-                KeyValue::new("i64_key_1", 2_i64),
-                KeyValue::new("f64_key_1", 3_f64),
-                KeyValue::new("str_key_1", "foo"),
-                KeyValue::new("bool_key_1", true),
-            ]
-            .as_slice(),
-        )),
+        Some(vec![
+            KeyValue::new("u64_key_1", 1_i64),
+            KeyValue::new("i64_key_1", 2_i64),
+            KeyValue::new("f64_key_1", 3_f64),
+            KeyValue::new("str_key_1", "foo"),
+            KeyValue::new("bool_key_1", true),
+        ]),
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -486,9 +459,7 @@ async fn display_attribute_is_exported() {
         "hello_world".to_string(),
         InstrumentKind::Counter,
         1_u64,
-        Some(AttributeSet::from(
-            [KeyValue::new("display_key_1", "display: foo")].as_slice(),
-        )),
+        Some(vec![KeyValue::new("display_key_1", "display: foo")]),
     );
 
     struct DisplayAttribute(String);
@@ -517,9 +488,7 @@ async fn debug_attribute_is_exported() {
         "hello_world".to_string(),
         InstrumentKind::Counter,
         1_u64,
-        Some(AttributeSet::from(
-            [KeyValue::new("debug_key_1", "debug: foo")].as_slice(),
-        )),
+        Some(vec![KeyValue::new("debug_key_1", "debug: foo")]),
     );
 
     struct DebugAttribute(String);
@@ -546,7 +515,7 @@ fn init_subscriber<T>(
     expected_metric_name: String,
     expected_instrument_kind: InstrumentKind,
     expected_value: T,
-    expected_attributes: Option<AttributeSet>,
+    expected_attributes: Option<Vec<KeyValue>>,
 ) -> (impl Subscriber + 'static, TestExporter<T>) {
     let reader = ManualReader::builder()
         .with_aggregation_selector(DefaultAggregationSelector::new())
@@ -563,12 +532,7 @@ fn init_subscriber<T>(
         expected_metric_name,
         expected_instrument_kind,
         expected_value,
-        expected_attributes: expected_attributes.map(|attrs| {
-            attrs
-                .iter()
-                .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
-                .collect()
-        }),
+        expected_attributes,
         reader,
         _meter_provider: provider.clone(),
     };
@@ -659,7 +623,10 @@ where
 
                         if let Some(expected_attributes) = self.expected_attributes.as_ref() {
                             sum.data_points.iter().for_each(|data_point| {
-                                assert_eq!(expected_attributes, &data_point.attributes)
+                                assert!(compare_attributes(
+                                    expected_attributes,
+                                    &data_point.attributes,
+                                ))
                             });
                         }
                     }
@@ -677,7 +644,10 @@ where
 
                         if let Some(expected_attributes) = self.expected_attributes.as_ref() {
                             gauge.data_points.iter().for_each(|data_point| {
-                                assert_eq!(expected_attributes, &data_point.attributes)
+                                assert!(compare_attributes(
+                                    expected_attributes,
+                                    &data_point.attributes,
+                                ))
                             });
                         }
                     }
@@ -689,7 +659,10 @@ where
                         assert_eq!(histogram_data.sum, self.expected_value);
 
                         if let Some(expected_attributes) = self.expected_attributes.as_ref() {
-                            assert_eq!(expected_attributes, &histogram_data.attributes);
+                            assert!(compare_attributes(
+                                expected_attributes,
+                                &histogram_data.attributes
+                            ))
                         }
                     }
                     unexpected => {
@@ -701,4 +674,17 @@ where
 
         Ok(())
     }
+}
+
+// After sorting the KeyValue vec, compare them.
+// Return true if they are equal.
+#[allow(clippy::ptr_arg)]
+fn compare_attributes(expected: &Vec<KeyValue>, actual: &Vec<KeyValue>) -> bool {
+    let mut expected = expected.clone();
+    let mut actual = actual.clone();
+
+    expected.sort();
+    actual.sort();
+
+    expected == actual
 }
