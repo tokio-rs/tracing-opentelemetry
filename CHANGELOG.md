@@ -1,3 +1,11 @@
+# [Unreleased]
+
+### Breaking Changes
+
+- Upgrade to opentelemetry 0.25. Refer to the upstream
+  [changelog](https://github.com/open-telemetry/opentelemetry-rust/releases/tag/opentelemetry-0.25.0)
+  for more information.
+
 # 0.25.0 (July 21, 2024)
 
 ### Breaking Changes
