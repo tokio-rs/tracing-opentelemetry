@@ -646,7 +646,7 @@ where
     /// exceptions][conv].
     ///
     /// * Only events without a message field (unnamed events) and at least one field with the name error
-    /// are considered for mapping.
+    ///   are considered for mapping.
     ///
     /// By default, these events are mapped.
     ///
@@ -1693,7 +1693,7 @@ mod tests {
             let context = tracing_error::SpanTrace::capture();
 
             // This can cause a deadlock if `on_record` locks extensions while attributes are visited
-            span.record("exception", &tracing::field::debug(&context));
+            span.record("exception", tracing::field::debug(&context));
             // This can cause a deadlock if `on_event` locks extensions while the event is visited
             tracing::info!(exception = &tracing::field::debug(&context), "hello");
         });
