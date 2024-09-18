@@ -17,6 +17,8 @@ rust-version = "1.65.0"
 
 [features]
 default = ["tracing-log", "metrics"]
+# Enables support for exporting OpenTelemetry logs_level_enabled
+logs_level_enabled = ["opentelemetry/logs_level_enabled","opentelemetry_sdk/logs_level_enabled"]
 # Enables support for exporting OpenTelemetry metrics
 metrics = ["opentelemetry/metrics","opentelemetry_sdk/metrics", "smallvec"]
 # Enables experimental support for OpenTelemetry gauge metrics
