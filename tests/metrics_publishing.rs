@@ -2,10 +2,7 @@ use opentelemetry::{metrics::MetricsError, KeyValue};
 use opentelemetry_sdk::{
     metrics::{
         data::{self, Gauge, Histogram, Sum},
-        reader::{
-            AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
-            MetricReader, TemporalitySelector,
-        },
+        reader::{MetricReader, TemporalitySelector},
         InstrumentKind, ManualReader, MeterProviderBuilder, SdkMeterProvider,
     },
     Resource,
@@ -517,10 +514,7 @@ fn init_subscriber<T>(
     expected_value: T,
     expected_attributes: Option<Vec<KeyValue>>,
 ) -> (impl Subscriber + 'static, TestExporter<T>) {
-    let reader = ManualReader::builder()
-        .with_aggregation_selector(DefaultAggregationSelector::new())
-        .with_temporality_selector(DefaultTemporalitySelector::new())
-        .build();
+    let reader = ManualReader::builder().build();
     let reader = TestReader {
         inner: Arc::new(reader),
     };
@@ -546,12 +540,6 @@ fn init_subscriber<T>(
 #[derive(Debug, Clone)]
 struct TestReader {
     inner: Arc<ManualReader>,
-}
-
-impl AggregationSelector for TestReader {
-    fn aggregation(&self, kind: InstrumentKind) -> opentelemetry_sdk::metrics::Aggregation {
-        self.inner.aggregation(kind)
-    }
 }
 
 impl TemporalitySelector for TestReader {

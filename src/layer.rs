@@ -310,9 +310,10 @@ impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
         let error_msg = value.to_string();
 
         if self.sem_conv_config.error_fields_to_exceptions {
-            self.event_builder
-                .attributes
-                .push(Key::new(FIELD_EXCEPTION_MESSAGE).string(error_msg.clone()));
+            self.event_builder.attributes.push(KeyValue::new(
+                Key::new(FIELD_EXCEPTION_MESSAGE),
+                Value::String(StringValue::from(error_msg.clone())),
+            ));
 
             // NOTE: This is actually not the stacktrace of the exception. This is
             // the "source chain". It represents the heirarchy of errors from the
@@ -320,9 +321,10 @@ impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
             // of the callsites in the code that led to the error happening.
             // `std::error::Error::backtrace` is a nightly-only API and cannot be
             // used here until the feature is stabilized.
-            self.event_builder
-                .attributes
-                .push(Key::new(FIELD_EXCEPTION_STACKTRACE).array(chain.clone()));
+            self.event_builder.attributes.push(KeyValue::new(
+                Key::new(FIELD_EXCEPTION_STACKTRACE),
+                Value::Array(chain.clone().into()),
+            ));
         }
 
         if self.sem_conv_config.error_records_to_exceptions {
@@ -349,12 +351,14 @@ impl<'a, 'b> field::Visit for SpanEventVisitor<'a, 'b> {
             ));
         }
 
-        self.event_builder
-            .attributes
-            .push(Key::new(field.name()).string(error_msg));
-        self.event_builder
-            .attributes
-            .push(Key::new(format!("{}.chain", field.name())).array(chain));
+        self.event_builder.attributes.push(KeyValue::new(
+            Key::new(field.name()),
+            Value::String(StringValue::from(error_msg)),
+        ));
+        self.event_builder.attributes.push(KeyValue::new(
+            Key::new(format!("{}.chain", field.name())),
+            Value::Array(chain.into()),
+        ));
     }
 }
 
@@ -460,7 +464,10 @@ impl<'a> field::Visit for SpanAttributeVisitor<'a> {
             SPAN_STATUS_MESSAGE_FIELD => {
                 self.span_builder_updates.status = Some(otel::Status::error(format!("{:?}", value)))
             }
-            _ => self.record(Key::new(field.name()).string(format!("{:?}", value))),
+            _ => self.record(KeyValue::new(
+                Key::new(field.name()),
+                Value::String(format!("{:?}", value).into()),
+            )),
         }
     }
 
@@ -484,7 +491,10 @@ impl<'a> field::Visit for SpanAttributeVisitor<'a> {
         let error_msg = value.to_string();
 
         if self.sem_conv_config.error_fields_to_exceptions {
-            self.record(Key::new(FIELD_EXCEPTION_MESSAGE).string(error_msg.clone()));
+            self.record(KeyValue::new(
+                Key::new(FIELD_EXCEPTION_MESSAGE),
+                Value::from(error_msg.clone()),
+            ));
 
             // NOTE: This is actually not the stacktrace of the exception. This is
             // the "source chain". It represents the heirarchy of errors from the
@@ -492,11 +502,20 @@ impl<'a> field::Visit for SpanAttributeVisitor<'a> {
             // of the callsites in the code that led to the error happening.
             // `std::error::Error::backtrace` is a nightly-only API and cannot be
             // used here until the feature is stabilized.
-            self.record(Key::new(FIELD_EXCEPTION_STACKTRACE).array(chain.clone()));
+            self.record(KeyValue::new(
+                Key::new(FIELD_EXCEPTION_STACKTRACE),
+                Value::Array(chain.clone().into()),
+            ));
         }
 
-        self.record(Key::new(field.name()).string(error_msg));
-        self.record(Key::new(format!("{}.chain", field.name())).array(chain));
+        self.record(KeyValue::new(
+            Key::new(field.name()),
+            Value::String(error_msg.into()),
+        ));
+        self.record(KeyValue::new(
+            Key::new(format!("{}.chain", field.name())),
+            Value::Array(chain.into()),
+        ));
     }
 }
 
@@ -996,18 +1015,24 @@ where
 
             #[cfg(feature = "tracing-log")]
             let target = if normalized_meta.is_some() {
-                target.string(meta.target().to_owned())
+                KeyValue::new(target, Value::String(meta.target().to_owned().into()))
             } else {
-                target.string(event.metadata().target())
+                KeyValue::new(target, Value::String(event.metadata().target().into()))
             };
 
             #[cfg(not(feature = "tracing-log"))]
-            let target = target.string(meta.target());
+            let target = KeyValue::new(target, Value::String(meta.target().into()));
 
             let mut otel_event = otel::Event::new(
                 String::new(),
                 crate::time::now(),
-                vec![Key::new("level").string(meta.level().as_str()), target],
+                vec![
+                    KeyValue::new(
+                        Key::new("level"),
+                        Value::String(meta.level().as_str().into()),
+                    ),
+                    target,
+                ],
                 0,
             );
 
