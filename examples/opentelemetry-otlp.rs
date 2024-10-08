@@ -1,15 +1,15 @@
 use opentelemetry::{global, trace::TracerProvider, Key, KeyValue};
 use opentelemetry_sdk::{
     metrics::{
-        reader::{DefaultAggregationSelector, DefaultTemporalitySelector},
-        Aggregation, Instrument, MeterProviderBuilder, PeriodicReader, SdkMeterProvider, Stream,
+        reader::DefaultTemporalitySelector, Aggregation, Instrument, MeterProviderBuilder,
+        PeriodicReader, SdkMeterProvider, Stream,
     },
     runtime,
     trace::{BatchConfig, RandomIdGenerator, Sampler, Tracer},
     Resource,
 };
 use opentelemetry_semantic_conventions::{
-    resource::{DEPLOYMENT_ENVIRONMENT_NAME, SERVICE_NAME, SERVICE_VERSION},
+    attribute::{DEPLOYMENT_ENVIRONMENT_NAME, SERVICE_NAME, SERVICE_VERSION},
     SCHEMA_URL,
 };
 use tracing_core::Level;
@@ -32,10 +32,7 @@ fn resource() -> Resource {
 fn init_meter_provider() -> SdkMeterProvider {
     let exporter = opentelemetry_otlp::new_exporter()
         .tonic()
-        .build_metrics_exporter(
-            Box::new(DefaultAggregationSelector::new()),
-            Box::new(DefaultTemporalitySelector::new()),
-        )
+        .build_metrics_exporter(Box::new(DefaultTemporalitySelector::new()))
         .unwrap();
 
     let reader = PeriodicReader::builder(exporter, runtime::Tokio)
