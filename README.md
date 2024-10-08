@@ -54,6 +54,17 @@ The crate provides the following types:
 
 [msrv]: #supported-rust-versions
 
+## Compatibility with OpenTelemetry crates
+
+Note that version numbers for this crate are **not** synchronized with the
+various OpenTelemetry crates, despite having similar version numbers. For
+discussion, see issue #170.
+
+Importantly, `tracing-opentelemetry` 0.26 is compatible with **0.25** of the
+OpenTelemetry crates, as their 0.26 has breaking changes that have not yet (as
+of 2024-10-08) been addressed in this crate.
+
+
 ## Examples
 
 ### Basic Usage
@@ -94,15 +105,35 @@ fn main() {
 `Cargo.toml`
 ```toml
 [dependencies]
-opentelemetry = "0.21"
-opentelemetry_sdk = "0.21"
-opentelemetry-stdout = { version = "0.2.0", features = ["trace"] }
+opentelemetry = "0.25"
+opentelemetry_sdk = "0.25"
+opentelemetry-stdout = { version = "0.25", features = ["trace"] }
 tracing = "0.1"
-tracing-opentelemetry = "0.22"
+tracing-opentelemetry = "0.26"
 tracing-subscriber = "0.3"
 ```
 
 ### Visualization example
+
+See [`opentelemetry-otlp.rs`](examples/opentelemetry-otlp.rs) in the
+[`examples`](examples) directory. To use this code in your own project, your
+`Cargo.toml` should include the following:
+
+```toml
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+opentelemetry = "0.25"
+opentelemetry_sdk = { version = "0.25", features = ["rt-tokio"] }
+opentelemetry-stdout = "0.25"
+opentelemetry-otlp = "0.25"
+opentelemetry-semantic-conventions = "0.25"
+tracing = "0.1"
+tracing-core = "0.1"
+tracing-opentelemetry = "0.26"
+tracing-subscriber = "0.3"
+```
+
+To run the example from this repository:
 
 ```console
 # Run a supported collector like jaeger in the background
