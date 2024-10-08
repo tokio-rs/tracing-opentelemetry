@@ -58,7 +58,8 @@ The crate provides the following types:
 
 Note that version numbers for this crate are **not** synchronized with the
 various OpenTelemetry crates, despite having similar version numbers. For
-discussion, see issue #170.
+discussion, see
+[issue #170](https://github.com/tokio-rs/tracing-opentelemetry/issues/170).
 
 Importantly, `tracing-opentelemetry` 0.26 is compatible with **0.25** of the
 OpenTelemetry crates, as their 0.26 has breaking changes that have not yet (as
