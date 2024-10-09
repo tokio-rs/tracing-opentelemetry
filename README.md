@@ -54,6 +54,16 @@ The crate provides the following types:
 
 [msrv]: #supported-rust-versions
 
+## Compatibility with OpenTelemetry crates
+
+Note that version numbers for this crate are **not** synchronized with the
+various OpenTelemetry crates, despite having similar version numbers. For
+discussion, see [issue #170](https://github.com/tokio-rs/tracing-opentelemetry/issues/170).
+
+As of 0.26, tracing-opentelemetry is one version ahead of the opentelemetry
+crates, such that tracing-opentelemetry 0.26.0 is compatible with opentelemetry 0.25.0,
+but due to semver compatibility concerns, this may not always be the case.
+
 ## Visualizing traces with Jaeger
 
 ```console
