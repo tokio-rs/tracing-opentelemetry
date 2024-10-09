@@ -50,10 +50,6 @@ The crate provides the following types:
 [`tracing`]: https://crates.io/crates/tracing
 [OpenTelemetry]: https://opentelemetry.io/
 
-*Compiler support: [requires `rustc` 1.65+][msrv]*
-
-[msrv]: #supported-rust-versions
-
 ## Compatibility with OpenTelemetry crates
 
 Note that version numbers for this crate are **not** synchronized with the
@@ -87,20 +83,6 @@ $ firefox http://localhost:16686/
 
 [`MetricsLayer`]: https://docs.rs/tracing-opentelemetry/latest/tracing_opentelemetry/struct.MetricsLayer.html
 [layer]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
-
-## Supported Rust Versions
-
-Tracing Opentelemetry is built against the latest stable release. The minimum
-supported version is 1.60. The current Tracing version is not guaranteed to
-build on Rust versions earlier than the minimum supported version.
-
-Tracing follows the same compiler support policies as the rest of the Tokio
-project. The current stable Rust compiler and the three most recent minor
-versions before it will always be supported. For example, if the current stable
-compiler version is 1.45, the minimum supported version will not be increased
-past 1.42, three minor versions prior. Increasing the minimum supported compiler
-version is not considered a semver breaking change as long as doing so complies
-with this policy.
 
 ## License
 
