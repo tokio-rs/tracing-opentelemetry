@@ -54,55 +54,7 @@ The crate provides the following types:
 
 [msrv]: #supported-rust-versions
 
-## Examples
-
-### Basic Usage
-
-```rust
-use opentelemetry::trace::TracerProvider as _;
-use opentelemetry_sdk::trace::TracerProvider;
-use opentelemetry_stdout as stdout;
-use tracing::{error, span};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::Registry;
-
-fn main() {
-    // Create a new OpenTelemetry trace pipeline that prints to stdout
-    let provider = TracerProvider::builder()
-        .with_simple_exporter(stdout::SpanExporter::default())
-        .build();
-    let tracer = provider.tracer("readme_example");
-
-    // Create a tracing layer with the configured tracer
-    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-
-    // Use the tracing subscriber `Registry`, or any other subscriber
-    // that impls `LookupSpan`
-    let subscriber = Registry::default().with(telemetry);
-
-    // Trace executed code
-    tracing::subscriber::with_default(subscriber, || {
-        // Spans will be sent to the configured OpenTelemetry exporter
-        let root = span!(tracing::Level::TRACE, "app_start", work_units = 2);
-        let _enter = root.enter();
-
-        error!("This event will be logged in the root span.");
-    });
-}
-```
-
-`Cargo.toml`
-```toml
-[dependencies]
-opentelemetry = "0.21"
-opentelemetry_sdk = "0.21"
-opentelemetry-stdout = { version = "0.2.0", features = ["trace"] }
-tracing = "0.1"
-tracing-opentelemetry = "0.22"
-tracing-subscriber = "0.3"
-```
-
-### Visualization example
+## Visualizing traces with Jaeger
 
 ```console
 # Run a supported collector like jaeger in the background
