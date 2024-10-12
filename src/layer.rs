@@ -1104,25 +1104,31 @@ where
     /// [`Span`]: opentelemetry::trace::Span
     fn on_close(&self, id: span::Id, ctx: Context<'_, S>) {
         let span = ctx.span(&id).expect("Span not found, this is a bug");
-        let mut extensions = span.extensions_mut();
+        let (otel_data, timings) = {
+            let mut extensions = span.extensions_mut();
+            let timings = if self.tracked_inactivity {
+                extensions.remove::<Timings>()
+            } else {
+                None
+            };
+            (extensions.remove::<OtelData>(), timings)
+        };
 
         if let Some(OtelData {
             mut builder,
             parent_cx,
-        }) = extensions.remove::<OtelData>()
+        }) = otel_data
         {
-            if self.tracked_inactivity {
-                // Append busy/idle timings when enabled.
-                if let Some(timings) = extensions.get_mut::<Timings>() {
-                    let busy_ns = Key::new("busy_ns");
-                    let idle_ns = Key::new("idle_ns");
+            // Append busy/idle timings when enabled.
+            if let Some(timings) = timings {
+                let busy_ns = Key::new("busy_ns");
+                let idle_ns = Key::new("idle_ns");
 
-                    let attributes = builder
-                        .attributes
-                        .get_or_insert_with(|| Vec::with_capacity(2));
-                    attributes.push(KeyValue::new(busy_ns, timings.busy));
-                    attributes.push(KeyValue::new(idle_ns, timings.idle));
-                }
+                let attributes = builder
+                    .attributes
+                    .get_or_insert_with(|| Vec::with_capacity(2));
+                attributes.push(KeyValue::new(busy_ns, timings.busy));
+                attributes.push(KeyValue::new(idle_ns, timings.idle));
             }
 
             // Build and start span, drop span to export
