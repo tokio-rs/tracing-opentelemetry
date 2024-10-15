@@ -1,5 +1,5 @@
 use futures_util::future::BoxFuture;
-use opentelemetry::trace::TracerProvider as _;
+use opentelemetry::{global as otel_global, trace::TracerProvider as _};
 use opentelemetry_sdk::{
     export::trace::{ExportResult, SpanData, SpanExporter},
     runtime,
@@ -47,7 +47,7 @@ fn test_tracer(runtime: &Runtime) -> (TracerProvider, TestExporter, impl Subscri
 }
 
 #[test]
-fn test_global_default() {
+fn shutdown_in_scope() {
     let rt = Runtime::new().unwrap();
     let (provider, exporter, subscriber) = test_tracer(&rt);
 
@@ -59,6 +59,26 @@ fn test_global_default() {
 
     // Should flush all batched telemetry spans
     provider.shutdown().unwrap();
+
+    let spans = exporter.0.lock().unwrap();
+    assert_eq!(spans.len(), 1000);
+}
+
+#[test]
+#[ignore = "https://github.com/open-telemetry/opentelemetry-rust/issues/1961"]
+fn shutdown_global() {
+    let rt = Runtime::new().unwrap();
+    let (provider, exporter, subscriber) = test_tracer(&rt);
+
+    otel_global::set_tracer_provider(provider);
+    subscriber::set_global_default(subscriber).unwrap();
+
+    for _ in 0..1000 {
+        let _span = info_span!(target: "test_telemetry", "test_span").entered();
+    }
+
+    // Should flush all batched telemetry spans
+    otel_global::shutdown_tracer_provider();
 
     let spans = exporter.0.lock().unwrap();
     assert_eq!(spans.len(), 1000);
