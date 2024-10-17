@@ -51,13 +51,14 @@ fn set_status_ok() {
 
 #[test]
 fn set_status_error() {
-    let expected_error = Status::Error { description: std::borrow::Cow::Borrowed("Elon put in too much fuel in his rocket!") };
+    let expected_error = Status::Error {
+        description: std::borrow::Cow::Borrowed("Elon put in too much fuel in his rocket!"),
+    };
     let root_span = set_status_helper(expected_error.clone());
     assert_eq!(expected_error, root_span.status);
 }
 
-fn set_status_helper(status: Status) -> SpanData
-{
+fn set_status_helper(status: Status) -> SpanData {
     let (_tracer, provider, exporter, subscriber) = test_tracer();
 
     tracing::subscriber::with_default(subscriber, || {

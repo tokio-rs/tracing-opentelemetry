@@ -137,19 +137,19 @@ pub trait OpenTelemetrySpanExt {
     /// Sets an OpenTelemetry status for this span.
     /// This is useful for setting the status of a span that was created by a library that does not declare
     /// the otel.status_code field of the span in advance.
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```rust
     /// use opentelemetry::trace::Status;
     /// use tracing_opentelemetry::OpenTelemetrySpanExt;
     /// use tracing::Span;
-    /// 
+    ///
     /// /// // Generate a tracing span as usual
     /// let app_root = tracing::span!(tracing::Level::INFO, "app_start");
     ///
     /// // Set the Status of the span to `Status::Ok`.
     /// app_root.set_status(Status::Ok);
-    /// 
     /// ```            
     fn set_status(&self, status: Status);
 }
