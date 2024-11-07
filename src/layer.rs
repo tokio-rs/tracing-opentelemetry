@@ -39,6 +39,7 @@ pub struct OpenTelemetryLayer<S, T> {
     location: bool,
     tracked_inactivity: bool,
     with_threads: bool,
+    with_level: bool,
     sem_conv_config: SemConvConfig,
     get_context: WithContext,
     _registry: marker::PhantomData<S>,
@@ -562,6 +563,7 @@ where
             location: true,
             tracked_inactivity: true,
             with_threads: true,
+            with_level: false,
             sem_conv_config: SemConvConfig {
                 error_fields_to_exceptions: true,
                 error_records_to_exceptions: true,
@@ -614,9 +616,11 @@ where
             location: self.location,
             tracked_inactivity: self.tracked_inactivity,
             with_threads: self.with_threads,
+            with_level: self.with_level,
             sem_conv_config: self.sem_conv_config,
             get_context: WithContext(OpenTelemetryLayer::<S, Tracer>::get_context),
             _registry: self._registry,
+            // cannot use ``..self` here due to different generics
         }
     }
 
@@ -742,6 +746,19 @@ where
         }
     }
 
+    /// Sets whether or not span metadata should include the `tracing` verbosity level information as a `level` field.
+    ///
+    /// The level is always added to events, and based on [`OpenTelemetryLayer::with_error_events_to_status`]
+    /// error-level events will mark the span status as an error.
+    ///
+    /// By default, level information is disabled.
+    pub fn with_level(self, level: bool) -> Self {
+        Self {
+            with_level: level,
+            ..self
+        }
+    }
+
     /// Retrieve the parent OpenTelemetry [`Context`] from the current tracing
     /// [`span`] through the [`Registry`]. This [`Context`] links spans to their
     /// parent for proper hierarchical visualization.
@@ -816,6 +833,9 @@ where
         }
         if self.with_threads {
             extra_attrs += 2;
+        }
+        if self.with_level {
+            extra_attrs += 1;
         }
         extra_attrs
     }
@@ -893,6 +913,10 @@ where
                 // `String` values...
                 builder_attrs.push(KeyValue::new("thread.name", name.to_string()));
             }
+        }
+
+        if self.with_level {
+            builder_attrs.push(KeyValue::new("level", attrs.metadata().level().as_str()));
         }
 
         let mut updates = SpanBuilderUpdates::default();
@@ -1605,6 +1629,42 @@ mod tests {
             .collect::<Vec<&str>>();
         assert!(!keys.contains(&"thread.name"));
         assert!(!keys.contains(&"thread.id"));
+    }
+
+    #[test]
+    fn includes_level() {
+        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let subscriber = tracing_subscriber::registry()
+            .with(layer().with_tracer(tracer.clone()).with_level(true));
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug_span!("request");
+        });
+
+        let attributes = tracer.with_data(|data| data.builder.attributes.as_ref().unwrap().clone());
+        let keys = attributes
+            .iter()
+            .map(|kv| kv.key.as_str())
+            .collect::<Vec<&str>>();
+        assert!(keys.contains(&"level"));
+    }
+
+    #[test]
+    fn excludes_level() {
+        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let subscriber = tracing_subscriber::registry()
+            .with(layer().with_tracer(tracer.clone()).with_level(false));
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug_span!("request");
+        });
+
+        let attributes = tracer.with_data(|data| data.builder.attributes.as_ref().unwrap().clone());
+        let keys = attributes
+            .iter()
+            .map(|kv| kv.key.as_str())
+            .collect::<Vec<&str>>();
+        assert!(!keys.contains(&"level"));
     }
 
     #[test]
