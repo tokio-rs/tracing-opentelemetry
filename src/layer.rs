@@ -563,7 +563,7 @@ where
             location: true,
             tracked_inactivity: true,
             with_threads: true,
-            with_level: true,
+            with_level: false,
             sem_conv_config: SemConvConfig {
                 error_fields_to_exceptions: true,
                 error_records_to_exceptions: true,
@@ -746,12 +746,12 @@ where
         }
     }
 
-    /// Sets whether or not span metadata should include OpenTelemetry
-    /// attributes with verbosity level information.
+    /// Sets whether or not span metadata should include the `tracing` verbosity level information as a `level` field.
     ///
-    /// The level is always added to events, and error-level events will mark the span status as an error.
+    /// The level is always added to events, and based on [`OpenTelemetryLayer::with_error_events_to_status`]
+    /// error-level events will mark the span status as an error.
     ///
-    /// By default, level information is enabled.
+    /// By default, level information is disabled.
     pub fn with_level(self, level: bool) -> Self {
         Self {
             with_level: level,
