@@ -1,9 +1,9 @@
-use opentelemetry::{metrics::MetricsError, KeyValue};
+use opentelemetry::KeyValue;
 use opentelemetry_sdk::{
     metrics::{
         data::{self, Gauge, Histogram, Sum},
-        reader::{MetricReader, TemporalitySelector},
-        InstrumentKind, ManualReader, MeterProviderBuilder, SdkMeterProvider,
+        reader::MetricReader,
+        InstrumentKind, ManualReader, MeterProviderBuilder, MetricError, SdkMeterProvider,
     },
     Resource,
 };
@@ -542,27 +542,28 @@ struct TestReader {
     inner: Arc<ManualReader>,
 }
 
-impl TemporalitySelector for TestReader {
-    fn temporality(&self, kind: InstrumentKind) -> opentelemetry_sdk::metrics::data::Temporality {
-        self.inner.temporality(kind)
-    }
-}
-
 impl MetricReader for TestReader {
     fn register_pipeline(&self, pipeline: std::sync::Weak<opentelemetry_sdk::metrics::Pipeline>) {
         self.inner.register_pipeline(pipeline);
     }
 
-    fn collect(&self, rm: &mut data::ResourceMetrics) -> opentelemetry::metrics::Result<()> {
+    fn collect(
+        &self,
+        rm: &mut data::ResourceMetrics,
+    ) -> opentelemetry_sdk::metrics::MetricResult<()> {
         self.inner.collect(rm)
     }
 
-    fn force_flush(&self) -> opentelemetry::metrics::Result<()> {
+    fn force_flush(&self) -> opentelemetry_sdk::metrics::MetricResult<()> {
         self.inner.force_flush()
     }
 
-    fn shutdown(&self) -> opentelemetry::metrics::Result<()> {
+    fn shutdown(&self) -> opentelemetry_sdk::metrics::MetricResult<()> {
         self.inner.shutdown()
+    }
+
+    fn temporality(&self, kind: InstrumentKind) -> opentelemetry_sdk::metrics::Temporality {
+        self.inner.temporality(kind)
     }
 }
 
@@ -579,7 +580,7 @@ impl<T> TestExporter<T>
 where
     T: Debug + PartialEq + Copy + std::iter::Sum + 'static,
 {
-    fn export(&self) -> Result<(), MetricsError> {
+    fn export(&self) -> Result<(), MetricError> {
         let mut rm = data::ResourceMetrics {
             resource: Resource::default(),
             scope_metrics: Vec::new(),
@@ -589,11 +590,8 @@ where
         assert!(!rm.scope_metrics.is_empty());
 
         rm.scope_metrics.into_iter().for_each(|scope_metrics| {
-            assert_eq!(scope_metrics.scope.name, INSTRUMENTATION_LIBRARY_NAME);
-            assert_eq!(
-                scope_metrics.scope.version.unwrap().as_ref(),
-                CARGO_PKG_VERSION
-            );
+            assert_eq!(scope_metrics.scope.name(), INSTRUMENTATION_LIBRARY_NAME);
+            assert_eq!(scope_metrics.scope.version().unwrap(), CARGO_PKG_VERSION);
 
             scope_metrics.metrics.into_iter().for_each(|metric| {
                 assert_eq!(metric.name, self.expected_metric_name);
@@ -671,8 +669,8 @@ fn compare_attributes(expected: &Vec<KeyValue>, actual: &Vec<KeyValue>) -> bool 
     let mut expected = expected.clone();
     let mut actual = actual.clone();
 
-    expected.sort();
-    actual.sort();
+    expected.sort_unstable_by(|a, b| a.key.cmp(&b.key));
+    actual.sort_unstable_by(|a, b| a.key.cmp(&b.key));
 
     expected == actual
 }

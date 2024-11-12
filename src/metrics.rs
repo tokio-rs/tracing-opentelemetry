@@ -6,7 +6,7 @@ use tracing_core::{Field, Interest, Metadata};
 use opentelemetry::metrics::Gauge;
 use opentelemetry::{
     metrics::{Counter, Histogram, Meter, MeterProvider, UpDownCounter},
-    KeyValue, Value,
+    InstrumentationScope, KeyValue, Value,
 };
 use tracing_subscriber::{
     filter::Filtered,
@@ -98,7 +98,7 @@ impl Instruments {
                 update_or_insert(
                     &self.u64_counter,
                     metric_name,
-                    || meter.u64_counter(metric_name).init(),
+                    || meter.u64_counter(metric_name).build(),
                     |ctr| ctr.add(value, attributes),
                 );
             }
@@ -106,7 +106,7 @@ impl Instruments {
                 update_or_insert(
                     &self.f64_counter,
                     metric_name,
-                    || meter.f64_counter(metric_name).init(),
+                    || meter.f64_counter(metric_name).build(),
                     |ctr| ctr.add(value, attributes),
                 );
             }
@@ -114,7 +114,7 @@ impl Instruments {
                 update_or_insert(
                     &self.i64_up_down_counter,
                     metric_name,
-                    || meter.i64_up_down_counter(metric_name).init(),
+                    || meter.i64_up_down_counter(metric_name).build(),
                     |ctr| ctr.add(value, attributes),
                 );
             }
@@ -122,7 +122,7 @@ impl Instruments {
                 update_or_insert(
                     &self.f64_up_down_counter,
                     metric_name,
-                    || meter.f64_up_down_counter(metric_name).init(),
+                    || meter.f64_up_down_counter(metric_name).build(),
                     |ctr| ctr.add(value, attributes),
                 );
             }
@@ -130,7 +130,7 @@ impl Instruments {
                 update_or_insert(
                     &self.u64_histogram,
                     metric_name,
-                    || meter.u64_histogram(metric_name).init(),
+                    || meter.u64_histogram(metric_name).build(),
                     |rec| rec.record(value, attributes),
                 );
             }
@@ -138,7 +138,7 @@ impl Instruments {
                 update_or_insert(
                     &self.f64_histogram,
                     metric_name,
-                    || meter.f64_histogram(metric_name).init(),
+                    || meter.f64_histogram(metric_name).build(),
                     |rec| rec.record(value, attributes),
                 );
             }
@@ -147,7 +147,7 @@ impl Instruments {
                 update_or_insert(
                     &self.u64_gauge,
                     metric_name,
-                    || meter.u64_gauge(metric_name).init(),
+                    || meter.u64_gauge(metric_name).build(),
                     |rec| rec.record(value, attributes),
                 );
             }
@@ -156,7 +156,7 @@ impl Instruments {
                 update_or_insert(
                     &self.i64_gauge,
                     metric_name,
-                    || meter.i64_gauge(metric_name).init(),
+                    || meter.i64_gauge(metric_name).build(),
                     |rec| rec.record(value, attributes),
                 );
             }
@@ -165,7 +165,7 @@ impl Instruments {
                 update_or_insert(
                     &self.f64_gauge,
                     metric_name,
-                    || meter.f64_gauge(metric_name).init(),
+                    || meter.f64_gauge(metric_name).build(),
                     |rec| rec.record(value, attributes),
                 );
             }
@@ -395,11 +395,10 @@ where
     where
         M: MeterProvider,
     {
-        let meter = meter_provider.versioned_meter(
-            INSTRUMENTATION_LIBRARY_NAME,
-            Some(CARGO_PKG_VERSION),
-            None::<&'static str>,
-            None,
+        let meter = meter_provider.meter_with_scope(
+            InstrumentationScope::builder(INSTRUMENTATION_LIBRARY_NAME)
+                .with_version(CARGO_PKG_VERSION)
+                .build(),
         );
 
         let layer = InstrumentLayer {
