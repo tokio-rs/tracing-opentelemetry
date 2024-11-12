@@ -536,17 +536,19 @@ where
     /// ```no_run
     /// use tracing_opentelemetry::OpenTelemetryLayer;
     /// use tracing_subscriber::layer::SubscriberExt;
-    /// use opentelemetry::trace::TracerProvider;
+    /// use opentelemetry::trace::TracerProvider as _;
     /// use tracing_subscriber::Registry;
     ///
     /// // Create an OTLP pipeline exporter for a `trace_demo` service.
     ///
-    /// let otlp_exporter = opentelemetry_otlp::new_exporter().tonic();
-    /// let tracer = opentelemetry_otlp::new_pipeline()
-    ///     .tracing()
-    ///     .with_exporter(otlp_exporter)
-    ///     .install_simple()
-    ///     .unwrap()
+    /// let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
+    ///     .with_tonic()
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let tracer = opentelemetry_sdk::trace::TracerProvider::builder()
+    ///     .with_simple_exporter(otlp_exporter)
+    ///     .build()
     ///     .tracer("trace_demo");
     ///
     /// // Create a layer with the configured tracer
@@ -591,12 +593,14 @@ where
     ///
     /// // Create an OTLP pipeline exporter for a `trace_demo` service.
     ///
-    /// let otlp_exporter = opentelemetry_otlp::new_exporter().tonic();
-    /// let tracer = opentelemetry_otlp::new_pipeline()
-    ///     .tracing()
-    ///     .with_exporter(otlp_exporter)
-    ///     .install_simple()
-    ///     .unwrap()
+    /// let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
+    ///     .with_tonic()
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let tracer = opentelemetry_sdk::trace::TracerProvider::builder()
+    ///     .with_simple_exporter(otlp_exporter)
+    ///     .build()
     ///     .tracer("trace_demo");
     ///
     /// // Create a layer with the configured tracer

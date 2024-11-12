@@ -6,8 +6,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use opentelemetry::{global, trace::TracerProvider};
-
+use opentelemetry::global;
+use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::{
     self as sdk,
     export::trace::{ExportResult, SpanExporter},
@@ -59,9 +59,8 @@ fn double_failable_work(fail: bool) -> Result<&'static str, Error> {
 fn main() -> Result<(), Box<dyn StdError + Send + Sync + 'static>> {
     let builder = sdk::trace::TracerProvider::builder().with_simple_exporter(WriterExporter);
     let provider = builder.build();
-    let tracer = provider
-        .tracer_builder("opentelemetry-write-exporter")
-        .build();
+    let tracer = provider.tracer("opentelemetry-write-exporter");
+
     global::set_tracer_provider(provider);
 
     let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
