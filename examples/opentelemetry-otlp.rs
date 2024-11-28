@@ -139,4 +139,8 @@ async fn foo() {
     );
 
     tracing::info!(histogram.baz = 10, "histogram example",);
+
+    tracing::info!(gauge.uaz = 1_u64, "gauge u64 example",);
+    tracing::info!(gauge.iaz = 1_i64, "gauge i64 example",);
+    tracing::info!(gauge.faz = 1_f64, "gauge f64 example",);
 }
