@@ -178,7 +178,7 @@ pub(crate) struct MetricVisitor<'a> {
     visited_metrics: &'a mut SmallVec<[(&'static str, InstrumentType); 2]>,
 }
 
-impl<'a> Visit for MetricVisitor<'a> {
+impl Visit for MetricVisitor<'_> {
     fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
         self.attributes
             .push(KeyValue::new(field.name(), format!("{value:?}")));
