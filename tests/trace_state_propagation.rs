@@ -7,7 +7,7 @@ use opentelemetry::{
 use opentelemetry_sdk::{
     export::trace::{ExportResult, SpanData, SpanExporter},
     propagation::{BaggagePropagator, TraceContextPropagator},
-    trace::{Config, Sampler, Tracer, TracerProvider},
+    trace::{Sampler, Tracer, TracerProvider},
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -107,9 +107,7 @@ fn sampling_decision_respects_new_parent() {
     let exporter = TestExporter::default();
     let provider = TracerProvider::builder()
         .with_simple_exporter(exporter.clone())
-        .with_config(
-            Config::default().with_sampler(Sampler::ParentBased(Box::new(Sampler::AlwaysOff))),
-        )
+        .with_sampler(Sampler::ParentBased(Box::new(Sampler::AlwaysOff)))
         .build();
     let tracer = provider.tracer("test");
     let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
