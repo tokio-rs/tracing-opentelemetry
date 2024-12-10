@@ -104,8 +104,7 @@
 //! long as doing so complies with this policy.
 //!
 //! [subscriber]: tracing_subscriber::subscribe
-#![deny(unreachable_pub)]
-#![cfg_attr(test, deny(warnings))]
+#![warn(unreachable_pub)]
 #![doc(html_root_url = "https://docs.rs/tracing-opentelemetry/0.22.0")]
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png",
