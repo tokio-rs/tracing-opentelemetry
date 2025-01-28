@@ -1071,6 +1071,15 @@ where
                 sem_conv_config: self.sem_conv_config,
             });
 
+            // If the event name is still empty, then there was no special handling of error fields.
+            // It should be safe to set the event name to the name provided by tracing.
+            // This is a hack but there are existing hacks that depend on the name being empty, so to avoid breaking those the event name is set here.
+            // Ideally, the name should be set above when the event is constructed.
+            // see: https://github.com/tokio-rs/tracing-opentelemetry/pull/28
+            if otel_event.name.is_empty() {
+                otel_event.name = std::borrow::Cow::Borrowed(event.metadata().name());
+            }
+
             let mut extensions = span.extensions_mut();
             let otel_data = extensions.get_mut::<OtelData>();
 
@@ -1487,6 +1496,42 @@ mod tests {
                 .into()
             )
         );
+    }
+
+    #[test]
+    fn records_event_name() {
+        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug_span!("test span").in_scope(|| {
+                tracing::event!(tracing::Level::INFO, "event name 1"); // this is equivalent to 'message = "event name 1"'
+                tracing::event!(name: "event name 2", tracing::Level::INFO, field1 = "field1");
+                tracing::event!(name: "event name 3", tracing::Level::INFO, error = "field2");
+                tracing::event!(name: "event name 4", tracing::Level::INFO, message = "field3");
+                tracing::event!(name: "event name 5", tracing::Level::INFO, name = "field4");
+            });
+        });
+
+        let events = tracer
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .builder
+            .events
+            .as_ref()
+            .unwrap()
+            .clone();
+
+        let mut iter = events.iter();
+
+        assert_eq!(iter.next().unwrap().name, "event name 1");
+        assert_eq!(iter.next().unwrap().name, "event name 2");
+        assert_eq!(iter.next().unwrap().name, "exception"); // error attribute is handled specially
+        assert_eq!(iter.next().unwrap().name, "field3"); // message attribute is handled specially
+        assert_eq!(iter.next().unwrap().name, "event name 5"); // name attribute should not conflict with event name.
     }
 
     #[test]
