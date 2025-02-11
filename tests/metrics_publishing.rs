@@ -1,5 +1,6 @@
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::{
+    error::OTelSdkResult,
     metrics::{
         data::{self, Gauge, Histogram, Sum},
         reader::MetricReader,
@@ -112,7 +113,6 @@ async fn f64_up_down_counter_is_exported() {
     exporter.export().unwrap();
 }
 
-#[cfg(feature = "metrics_gauge_unstable")]
 #[tokio::test]
 async fn u64_gauge_is_exported() {
     let (subscriber, exporter) =
@@ -126,7 +126,6 @@ async fn u64_gauge_is_exported() {
     exporter.export().unwrap();
 }
 
-#[cfg(feature = "metrics_gauge_unstable")]
 #[tokio::test]
 async fn f64_gauge_is_exported() {
     let (subscriber, exporter) =
@@ -140,7 +139,6 @@ async fn f64_gauge_is_exported() {
     exporter.export().unwrap();
 }
 
-#[cfg(feature = "metrics_gauge_unstable")]
 #[tokio::test]
 async fn i64_gauge_is_exported() {
     let (subscriber, exporter) =
@@ -302,7 +300,6 @@ async fn f64_up_down_counter_with_attributes_is_exported() {
     exporter.export().unwrap();
 }
 
-#[cfg(feature = "metrics_gauge_unstable")]
 #[tokio::test]
 async fn f64_gauge_with_attributes_is_exported() {
     let (subscriber, exporter) = init_subscriber(
@@ -332,7 +329,6 @@ async fn f64_gauge_with_attributes_is_exported() {
     exporter.export().unwrap();
 }
 
-#[cfg(feature = "metrics_gauge_unstable")]
 #[tokio::test]
 async fn u64_gauge_with_attributes_is_exported() {
     let (subscriber, exporter) = init_subscriber(
@@ -362,7 +358,6 @@ async fn u64_gauge_with_attributes_is_exported() {
     exporter.export().unwrap();
 }
 
-#[cfg(feature = "metrics_gauge_unstable")]
 #[tokio::test]
 async fn i64_gauge_with_attributes_is_exported() {
     let (subscriber, exporter) = init_subscriber(
@@ -554,11 +549,12 @@ impl MetricReader for TestReader {
         self.inner.collect(rm)
     }
 
-    fn force_flush(&self) -> opentelemetry_sdk::metrics::MetricResult<()> {
+    fn force_flush(&self) -> OTelSdkResult {
         self.inner.force_flush()
     }
 
-    fn shutdown(&self) -> opentelemetry_sdk::metrics::MetricResult<()> {
+    fn shutdown(&self) -> OTelSdkResult {
+        eprintln!("OUTER shutdown??!!!");
         self.inner.shutdown()
     }
 
@@ -582,7 +578,7 @@ where
 {
     fn export(&self) -> Result<(), MetricError> {
         let mut rm = data::ResourceMetrics {
-            resource: Resource::default(),
+            resource: Resource::builder().build(),
             scope_metrics: Vec::new(),
         };
         self.reader.collect(&mut rm)?;

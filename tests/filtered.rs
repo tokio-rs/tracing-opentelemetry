@@ -1,8 +1,8 @@
 use futures_util::future::BoxFuture;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::{
-    export::trace::{ExportResult, SpanData, SpanExporter},
-    trace::{Tracer, TracerProvider},
+    error::OTelSdkResult,
+    trace::{SdkTracerProvider, SpanData, SpanExporter, Tracer},
 };
 use std::sync::{Arc, Mutex};
 use tracing::level_filters::LevelFilter;
@@ -14,7 +14,7 @@ use tracing_subscriber::prelude::*;
 struct TestExporter(Arc<Mutex<Vec<SpanData>>>);
 
 impl SpanExporter for TestExporter {
-    fn export(&mut self, mut batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
+    fn export(&mut self, mut batch: Vec<SpanData>) -> BoxFuture<'static, OTelSdkResult> {
         let spans = self.0.clone();
         Box::pin(async move {
             if let Ok(mut inner) = spans.lock() {
@@ -25,9 +25,9 @@ impl SpanExporter for TestExporter {
     }
 }
 
-fn test_tracer() -> (Tracer, TracerProvider, TestExporter, impl Subscriber) {
+fn test_tracer() -> (Tracer, SdkTracerProvider, TestExporter, impl Subscriber) {
     let exporter = TestExporter::default();
-    let provider = TracerProvider::builder()
+    let provider = SdkTracerProvider::builder()
         .with_simple_exporter(exporter.clone())
         .build();
     let tracer = provider.tracer("test");

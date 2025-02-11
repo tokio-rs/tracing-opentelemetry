@@ -19,12 +19,10 @@ rust-version = "1.70.0"
 default = ["tracing-log", "metrics"]
 # Enables support for exporting OpenTelemetry metrics
 metrics = ["opentelemetry/metrics","opentelemetry_sdk/metrics", "smallvec"]
-# Enables experimental support for OpenTelemetry gauge metrics
-metrics_gauge_unstable = ["opentelemetry/otel_unstable"]
 
 [dependencies]
-opentelemetry = { version = "0.27.0", default-features = false, features = ["trace"] }
-opentelemetry_sdk = { version = "0.27.0", default-features = false, features = ["trace"] }
+opentelemetry = { version = "0.28.0", default-features = false, features = ["trace"] }
+opentelemetry_sdk = { version = "0.28.0", default-features = false, features = ["trace"] }
 tracing = { version = "0.1.35", default-features = false, features = ["std"] }
 tracing-core = "0.1.28"
 tracing-subscriber = { version = "0.3.0", default-features = false, features = ["registry", "std"] }
@@ -43,11 +41,11 @@ smallvec = { version = "1.0", optional = true }
 [dev-dependencies]
 async-trait = "0.1.56"
 criterion = { version = "0.5.1", default-features = false, features = ["html_reports"] }
-opentelemetry = { version = "0.27.0", features = ["trace", "metrics"] }
-opentelemetry_sdk = { version = "0.27.0", default-features = false, features = ["trace", "rt-tokio"] }
-opentelemetry-stdout = { version = "0.27.0", features = ["trace", "metrics"] }
-opentelemetry-otlp = { version = "0.27.0", features = ["metrics"] }
-opentelemetry-semantic-conventions = { version = "0.27.0", features = ["semconv_experimental"] }
+opentelemetry = { version = "0.28.0", features = ["trace", "metrics"] }
+opentelemetry_sdk = { version = "0.28.0", default-features = false, features = ["trace", "rt-tokio"] }
+opentelemetry-stdout = { version = "0.28.0", features = ["trace", "metrics"] }
+opentelemetry-otlp = { version = "0.28.0", features = ["grpc-tonic", "metrics"] }
+opentelemetry-semantic-conventions = { version = "0.28.0", features = ["semconv_experimental"] }
 futures-util = { version = "0.3.17", default-features = false }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"

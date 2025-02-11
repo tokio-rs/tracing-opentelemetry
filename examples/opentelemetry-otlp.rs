@@ -1,8 +1,8 @@
+use once_cell::sync::Lazy;
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
 use opentelemetry_sdk::{
-    metrics::{MeterProviderBuilder, PeriodicReader, SdkMeterProvider},
-    runtime,
-    trace::{RandomIdGenerator, Sampler, TracerProvider},
+    metrics::{PeriodicReader, SdkMeterProvider},
+    trace::{RandomIdGenerator, Sampler, SdkTracerProvider},
     Resource,
 };
 use opentelemetry_semantic_conventions::{
@@ -14,16 +14,18 @@ use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 // Create a Resource that captures information about the entity for which telemetry is recorded.
-fn resource() -> Resource {
-    Resource::from_schema_url(
-        [
-            KeyValue::new(SERVICE_NAME, env!("CARGO_PKG_NAME")),
-            KeyValue::new(SERVICE_VERSION, env!("CARGO_PKG_VERSION")),
-            KeyValue::new(DEPLOYMENT_ENVIRONMENT_NAME, "develop"),
-        ],
-        SCHEMA_URL,
-    )
-}
+static RESOURCE: Lazy<Resource> = Lazy::new(|| {
+    Resource::builder_empty()
+        .with_schema_url(
+            [
+                KeyValue::new(SERVICE_NAME, env!("CARGO_PKG_NAME")),
+                KeyValue::new(SERVICE_VERSION, env!("CARGO_PKG_VERSION")),
+                KeyValue::new(DEPLOYMENT_ENVIRONMENT_NAME, "develop"),
+            ],
+            SCHEMA_URL,
+        )
+        .build()
+});
 
 // Construct MeterProvider for MetricsLayer
 fn init_meter_provider() -> SdkMeterProvider {
@@ -33,19 +35,16 @@ fn init_meter_provider() -> SdkMeterProvider {
         .build()
         .unwrap();
 
-    let reader = PeriodicReader::builder(exporter, runtime::Tokio)
-        .with_interval(std::time::Duration::from_secs(30))
+    let reader = PeriodicReader::builder(exporter)
+        .with_interval(std::time::Duration::from_secs(1))
         .build();
 
     // For debugging in development
-    let stdout_reader = PeriodicReader::builder(
-        opentelemetry_stdout::MetricExporter::default(),
-        runtime::Tokio,
-    )
-    .build();
+    let stdout_reader =
+        PeriodicReader::builder(opentelemetry_stdout::MetricExporter::default()).build();
 
-    let meter_provider = MeterProviderBuilder::default()
-        .with_resource(resource())
+    let meter_provider = SdkMeterProvider::builder()
+        .with_resource(RESOURCE.clone())
         .with_reader(reader)
         .with_reader(stdout_reader)
         .build();
@@ -55,22 +54,22 @@ fn init_meter_provider() -> SdkMeterProvider {
     meter_provider
 }
 
-// Construct TracerProvider for OpenTelemetryLayer
-fn init_tracer_provider() -> TracerProvider {
+// Construct SdkTracerProvider for OpenTelemetryLayer
+fn init_tracer_provider() -> SdkTracerProvider {
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
         .build()
         .unwrap();
 
-    TracerProvider::builder()
+    SdkTracerProvider::builder()
         // Customize sampling strategy
         .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
             1.0,
         ))))
         // If export trace to AWS X-Ray, you can use XrayIdGenerator
         .with_id_generator(RandomIdGenerator::default())
-        .with_resource(resource())
-        .with_batch_exporter(exporter, runtime::Tokio)
+        .with_resource(RESOURCE.clone())
+        .with_batch_exporter(exporter)
         .build()
 }
 
@@ -104,17 +103,17 @@ fn init_tracing_subscriber() -> OtelGuard {
 }
 
 struct OtelGuard {
-    tracer_provider: TracerProvider,
+    tracer_provider: SdkTracerProvider,
     meter_provider: SdkMeterProvider,
 }
 
 impl Drop for OtelGuard {
     fn drop(&mut self) {
         if let Err(err) = self.tracer_provider.shutdown() {
-            eprintln!("{err:?}");
+            eprintln!("Failed to shutdown tracer_provider: {err:?}");
         }
         if let Err(err) = self.meter_provider.shutdown() {
-            eprintln!("{err:?}");
+            eprintln!("Failed to shutdown meter_provider: {err:?}");
         }
     }
 }

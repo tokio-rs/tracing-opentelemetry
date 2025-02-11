@@ -2,7 +2,6 @@ use std::{collections::HashMap, fmt, sync::RwLock};
 use tracing::{field::Visit, Subscriber};
 use tracing_core::{Field, Interest, Metadata};
 
-#[cfg(feature = "metrics_gauge_unstable")]
 use opentelemetry::metrics::Gauge;
 use opentelemetry::{
     metrics::{Counter, Histogram, Meter, MeterProvider, UpDownCounter},
@@ -23,7 +22,6 @@ const INSTRUMENTATION_LIBRARY_NAME: &str = "tracing/tracing-opentelemetry";
 const METRIC_PREFIX_MONOTONIC_COUNTER: &str = "monotonic_counter.";
 const METRIC_PREFIX_COUNTER: &str = "counter.";
 const METRIC_PREFIX_HISTOGRAM: &str = "histogram.";
-#[cfg(feature = "metrics_gauge_unstable")]
 const METRIC_PREFIX_GAUGE: &str = "gauge.";
 
 const I64_MAX: u64 = i64::MAX as u64;
@@ -36,11 +34,8 @@ pub(crate) struct Instruments {
     f64_up_down_counter: MetricsMap<UpDownCounter<f64>>,
     u64_histogram: MetricsMap<Histogram<u64>>,
     f64_histogram: MetricsMap<Histogram<f64>>,
-    #[cfg(feature = "metrics_gauge_unstable")]
     u64_gauge: MetricsMap<Gauge<u64>>,
-    #[cfg(feature = "metrics_gauge_unstable")]
     i64_gauge: MetricsMap<Gauge<i64>>,
-    #[cfg(feature = "metrics_gauge_unstable")]
     f64_gauge: MetricsMap<Gauge<f64>>,
 }
 
@@ -54,11 +49,8 @@ pub(crate) enum InstrumentType {
     UpDownCounterF64(f64),
     HistogramU64(u64),
     HistogramF64(f64),
-    #[cfg(feature = "metrics_gauge_unstable")]
     GaugeU64(u64),
-    #[cfg(feature = "metrics_gauge_unstable")]
     GaugeI64(i64),
-    #[cfg(feature = "metrics_gauge_unstable")]
     GaugeF64(f64),
 }
 
@@ -142,7 +134,6 @@ impl Instruments {
                     |rec| rec.record(value, attributes),
                 );
             }
-            #[cfg(feature = "metrics_gauge_unstable")]
             InstrumentType::GaugeU64(value) => {
                 update_or_insert(
                     &self.u64_gauge,
@@ -151,7 +142,6 @@ impl Instruments {
                     |rec| rec.record(value, attributes),
                 );
             }
-            #[cfg(feature = "metrics_gauge_unstable")]
             InstrumentType::GaugeI64(value) => {
                 update_or_insert(
                     &self.i64_gauge,
@@ -160,7 +150,6 @@ impl Instruments {
                     |rec| rec.record(value, attributes),
                 );
             }
-            #[cfg(feature = "metrics_gauge_unstable")]
             InstrumentType::GaugeF64(value) => {
                 update_or_insert(
                     &self.f64_gauge,
@@ -185,7 +174,6 @@ impl Visit for MetricVisitor<'_> {
     }
 
     fn record_u64(&mut self, field: &Field, value: u64) {
-        #[cfg(feature = "metrics_gauge_unstable")]
         if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_GAUGE) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::GaugeU64(value)));
@@ -216,7 +204,6 @@ impl Visit for MetricVisitor<'_> {
     }
 
     fn record_f64(&mut self, field: &Field, value: f64) {
-        #[cfg(feature = "metrics_gauge_unstable")]
         if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_GAUGE) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::GaugeF64(value)));
@@ -238,7 +225,6 @@ impl Visit for MetricVisitor<'_> {
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
-        #[cfg(feature = "metrics_gauge_unstable")]
         if let Some(metric_name) = field.name().strip_prefix(METRIC_PREFIX_GAUGE) {
             self.visited_metrics
                 .push((metric_name, InstrumentType::GaugeI64(value)));
@@ -427,7 +413,6 @@ impl MetricsFilter {
                     return true;
                 }
 
-                #[cfg(feature = "metrics_gauge_unstable")]
                 if name.starts_with(METRIC_PREFIX_GAUGE) {
                     return true;
                 }
