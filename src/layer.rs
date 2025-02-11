@@ -546,7 +546,7 @@ where
     ///     .build()
     ///     .unwrap();
     ///
-    /// let tracer = opentelemetry_sdk::trace::TracerProvider::builder()
+    /// let tracer = opentelemetry_sdk::trace::SdkTracerProvider::builder()
     ///     .with_simple_exporter(otlp_exporter)
     ///     .build()
     ///     .tracer("trace_demo");
@@ -598,7 +598,7 @@ where
     ///     .build()
     ///     .unwrap();
     ///
-    /// let tracer = opentelemetry_sdk::trace::TracerProvider::builder()
+    /// let tracer = opentelemetry_sdk::trace::SdkTracerProvider::builder()
     ///     .with_simple_exporter(otlp_exporter)
     ///     .build()
     ///     .tracer("trace_demo");

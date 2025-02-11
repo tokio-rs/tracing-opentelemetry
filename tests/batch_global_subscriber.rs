@@ -1,9 +1,8 @@
 use futures_util::future::BoxFuture;
 use opentelemetry::{global as otel_global, trace::TracerProvider as _};
 use opentelemetry_sdk::{
-    export::trace::{ExportResult, SpanData, SpanExporter},
-    runtime,
-    trace::TracerProvider,
+    error::OTelSdkResult,
+    trace::{SdkTracerProvider, SpanData, SpanExporter},
 };
 use tokio::runtime::Runtime;
 use tracing::{info_span, subscriber, Level, Subscriber};
@@ -17,7 +16,7 @@ use std::sync::{Arc, Mutex};
 struct TestExporter(Arc<Mutex<Vec<SpanData>>>);
 
 impl SpanExporter for TestExporter {
-    fn export(&mut self, mut batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
+    fn export(&mut self, mut batch: Vec<SpanData>) -> BoxFuture<'static, OTelSdkResult> {
         let spans = self.0.clone();
         Box::pin(async move {
             if let Ok(mut inner) = spans.lock() {
@@ -28,12 +27,12 @@ impl SpanExporter for TestExporter {
     }
 }
 
-fn test_tracer(runtime: &Runtime) -> (TracerProvider, TestExporter, impl Subscriber) {
+fn test_tracer(runtime: &Runtime) -> (SdkTracerProvider, TestExporter, impl Subscriber) {
     let _guard = runtime.enter();
 
     let exporter = TestExporter::default();
-    let provider = TracerProvider::builder()
-        .with_batch_exporter(exporter.clone(), runtime::Tokio)
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter.clone())
         .build();
     let tracer = provider.tracer("test");
 
@@ -70,7 +69,7 @@ fn shutdown_global() {
     let rt = Runtime::new().unwrap();
     let (provider, exporter, subscriber) = test_tracer(&rt);
 
-    otel_global::set_tracer_provider(provider);
+    otel_global::set_tracer_provider(provider.clone());
     subscriber::set_global_default(subscriber).unwrap();
 
     for _ in 0..1000 {
@@ -78,7 +77,7 @@ fn shutdown_global() {
     }
 
     // Should flush all batched telemetry spans
-    otel_global::shutdown_tracer_provider();
+    provider.shutdown().unwrap();
 
     let spans = exporter.0.lock().unwrap();
     assert_eq!(spans.len(), 1000);
