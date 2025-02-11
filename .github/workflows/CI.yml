@@ -80,7 +80,7 @@ jobs:
     - run: cargo hack check --feature-powerset --no-dev-deps
 
   check-msrv:
-    # Run `cargo check` on our minimum supported Rust version (1.70.0). This
+    # Run `cargo check` on our minimum supported Rust version (1.75.0). This
     # checks with minimal versions; maximal versions are checked above.
     name: "cargo check (+MSRV -Zminimal-versions)"
     needs: check
@@ -88,7 +88,7 @@ jobs:
     strategy:
       matrix:
         toolchain:
-        - 1.70.0
+        - 1.75.0
         - stable
     steps:
     - uses: actions/checkout@v4
