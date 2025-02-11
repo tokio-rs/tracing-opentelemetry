@@ -152,11 +152,11 @@ mod tests {
     use super::*;
     use crate::OtelData;
     use opentelemetry::trace::TracerProvider as _;
-    use opentelemetry_sdk::trace::{Sampler, TracerProvider};
+    use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
 
     #[test]
     fn assigns_default_trace_id_if_missing() {
-        let provider = TracerProvider::default();
+        let provider = SdkTracerProvider::default();
         let tracer = provider.tracer("test");
         let mut builder = SpanBuilder::from_name("empty".to_string());
         builder.span_id = Some(SpanId::from(1u64));
@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn sampled_context() {
         for (name, sampler, parent_cx, previous_sampling_result, is_sampled) in sampler_data() {
-            let provider = TracerProvider::builder().with_sampler(sampler).build();
+            let provider = SdkTracerProvider::builder().with_sampler(sampler).build();
             let tracer = provider.tracer("test");
             let mut builder = SpanBuilder::from_name("parent".to_string());
             builder.sampling_result = previous_sampling_result;

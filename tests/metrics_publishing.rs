@@ -1,5 +1,6 @@
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::{
+    error::OTelSdkResult,
     metrics::{
         data::{self, Gauge, Histogram, Sum},
         reader::MetricReader,
@@ -554,11 +555,11 @@ impl MetricReader for TestReader {
         self.inner.collect(rm)
     }
 
-    fn force_flush(&self) -> opentelemetry_sdk::metrics::MetricResult<()> {
+    fn force_flush(&self) -> OTelSdkResult {
         self.inner.force_flush()
     }
 
-    fn shutdown(&self) -> opentelemetry_sdk::metrics::MetricResult<()> {
+    fn shutdown(&self) -> OTelSdkResult {
         self.inner.shutdown()
     }
 
@@ -582,7 +583,7 @@ where
 {
     fn export(&self) -> Result<(), MetricError> {
         let mut rm = data::ResourceMetrics {
-            resource: Resource::default(),
+            resource: Resource::builder().build(),
             scope_metrics: Vec::new(),
         };
         self.reader.collect(&mut rm)?;

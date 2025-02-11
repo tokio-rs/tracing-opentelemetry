@@ -51,14 +51,14 @@
 //! ## Examples
 //!
 //! ```
-//! use opentelemetry_sdk::trace::TracerProvider;
+//! use opentelemetry_sdk::trace::SdkTracerProvider;
 //! use opentelemetry::trace::{Tracer, TracerProvider as _};
 //! use tracing::{error, span};
 //! use tracing_subscriber::layer::SubscriberExt;
 //! use tracing_subscriber::Registry;
 //!
 //! // Create a new OpenTelemetry trace pipeline that prints to stdout
-//! let provider = TracerProvider::builder()
+//! let provider = SdkTracerProvider::builder()
 //!     .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
 //!     .build();
 //! let tracer = provider.tracer("readme_example");

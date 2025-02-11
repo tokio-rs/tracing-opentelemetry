@@ -3,7 +3,7 @@ use opentelemetry::{
     trace::{Span, SpanBuilder, Tracer as _, TracerProvider as _},
     Context,
 };
-use opentelemetry_sdk::trace::{Tracer, TracerProvider};
+use opentelemetry_sdk::trace::{SdkTracerProvider, Tracer};
 #[cfg(not(target_os = "windows"))]
 use pprof::criterion::{Output, PProfProfiler};
 use std::time::SystemTime;
@@ -14,7 +14,7 @@ fn many_enters(c: &mut Criterion) {
     let mut group = c.benchmark_group("otel_many_enters");
 
     group.bench_function("spec_baseline", |b| {
-        let provider = TracerProvider::default();
+        let provider = SdkTracerProvider::default();
         let tracer = provider.tracer("bench");
         b.iter(|| {
             fn dummy(tracer: &Tracer, cx: &Context) {
@@ -43,7 +43,7 @@ fn many_enters(c: &mut Criterion) {
     }
 
     {
-        let provider = TracerProvider::default();
+        let provider = SdkTracerProvider::default();
         let tracer = provider.tracer("bench");
         let otel_layer = tracing_opentelemetry::layer()
             .with_tracer(tracer)
@@ -56,7 +56,7 @@ fn many_enters(c: &mut Criterion) {
     }
 
     {
-        let provider = TracerProvider::default();
+        let provider = SdkTracerProvider::default();
         let tracer = provider.tracer("bench");
         let otel_layer = tracing_opentelemetry::layer()
             .with_tracer(tracer)
@@ -73,7 +73,7 @@ fn many_children(c: &mut Criterion) {
     let mut group = c.benchmark_group("otel_many_children");
 
     group.bench_function("spec_baseline", |b| {
-        let provider = TracerProvider::default();
+        let provider = SdkTracerProvider::default();
         let tracer = provider.tracer("bench");
         b.iter(|| {
             fn dummy(tracer: &Tracer, cx: &Context) {
@@ -101,7 +101,7 @@ fn many_children(c: &mut Criterion) {
     }
 
     {
-        let provider = TracerProvider::default();
+        let provider = SdkTracerProvider::default();
         let tracer = provider.tracer("bench");
         let otel_layer = tracing_opentelemetry::layer()
             .with_tracer(tracer)
@@ -118,7 +118,7 @@ fn many_events(c: &mut Criterion) {
     let mut group = c.benchmark_group("otel_many_events");
 
     group.bench_function("spec_baseline", |b| {
-        let provider = TracerProvider::default();
+        let provider = SdkTracerProvider::default();
         let tracer = provider.tracer("bench");
         b.iter(|| {
             fn dummy(tracer: &Tracer, cx: &Context) {
@@ -147,7 +147,7 @@ fn many_events(c: &mut Criterion) {
     }
 
     {
-        let provider = TracerProvider::default();
+        let provider = SdkTracerProvider::default();
         let tracer = provider.tracer("bench");
         let otel_layer = tracing_opentelemetry::layer()
             .with_tracer(tracer)
@@ -160,7 +160,7 @@ fn many_events(c: &mut Criterion) {
     }
 
     {
-        let provider = TracerProvider::builder()
+        let provider = SdkTracerProvider::builder()
             .with_max_events_per_span(1000)
             .build();
         let tracer = provider.tracer("bench");

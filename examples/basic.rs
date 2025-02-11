@@ -1,5 +1,5 @@
 use opentelemetry::trace::TracerProvider as _;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use opentelemetry_stdout as stdout;
 use tracing::{error, span};
 use tracing_subscriber::layer::SubscriberExt;
@@ -7,7 +7,7 @@ use tracing_subscriber::Registry;
 
 fn main() {
     // Create a new OpenTelemetry trace pipeline that prints to stdout
-    let provider = TracerProvider::builder()
+    let provider = SdkTracerProvider::builder()
         .with_simple_exporter(stdout::SpanExporter::default())
         .build();
     let tracer = provider.tracer("readme_example");
