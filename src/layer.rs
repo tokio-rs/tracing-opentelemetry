@@ -729,6 +729,8 @@ where
     /// Sets whether or not spans metadata should include the _busy time_
     /// (total time for which it was entered), and _idle time_ (total time
     /// the span existed but was not entered).
+    ///
+    /// By default, inactivity tracking is enabled.
     pub fn with_tracked_inactivity(self, tracked_inactivity: bool) -> Self {
         Self {
             tracked_inactivity,
