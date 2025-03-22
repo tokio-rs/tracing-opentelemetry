@@ -1,3 +1,11 @@
+# Unreleased
+
+### Breaking Changes
+
+- Upgrade from opentelemetry 0.28.0 to 0.29.0. Refer to the upstream
+  [changelog](https://github.com/open-telemetry/opentelemetry-rust/blob/main/opentelemetry-sdk/CHANGELOG.md#0290)
+  for more information.
+
 # 0.27.0 (October 9, 2024)
 
 ### Breaking Changes
