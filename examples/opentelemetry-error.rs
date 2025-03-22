@@ -92,17 +92,17 @@ fn main() -> Result<(), Box<dyn StdError + Send + Sync + 'static>> {
 struct WriterExporter;
 
 impl SpanExporter for WriterExporter {
-    fn export(
-        &mut self,
+    async fn export(
+        &self,
         batch: Vec<sdk::trace::SpanData>,
-    ) -> futures_util::future::BoxFuture<'static, OTelSdkResult> {
+    ) -> OTelSdkResult {
         let mut writer = std::io::stdout();
         for span in batch {
             writeln!(writer, "{}", SpanData(span)).unwrap();
         }
         writeln!(writer).unwrap();
 
-        Box::pin(async move { OTelSdkResult::Ok(()) })
+        OTelSdkResult::Ok(())
     }
 }
 

@@ -1,4 +1,3 @@
-use futures_util::future::BoxFuture;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::error::OTelSdkResult;
 use opentelemetry_sdk::trace::{SdkTracerProvider, SpanData, SpanExporter, Tracer};
@@ -106,13 +105,11 @@ fn test_tracer(
 struct TestExporter(Arc<Mutex<Vec<SpanData>>>);
 
 impl SpanExporter for TestExporter {
-    fn export(&mut self, mut batch: Vec<SpanData>) -> BoxFuture<'static, OTelSdkResult> {
+    async fn export(&self, mut batch: Vec<SpanData>) -> OTelSdkResult {
         let spans = self.0.clone();
-        Box::pin(async move {
-            if let Ok(mut inner) = spans.lock() {
-                inner.append(&mut batch);
-            }
-            Ok(())
-        })
+        if let Ok(mut inner) = spans.lock() {
+            inner.append(&mut batch);
+        }
+        Ok(())
     }
 }
