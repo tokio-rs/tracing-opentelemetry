@@ -1,5 +1,7 @@
 # Unreleased
 
+# 0.30.0 (March 23, 2025)
+
 ### Breaking Changes
 
 - Upgrade from opentelemetry 0.28.0 to 0.29.0. Refer to the upstream
