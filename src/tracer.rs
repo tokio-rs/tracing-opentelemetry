@@ -66,35 +66,37 @@ impl PreSampledTracer for noop::NoopTracer {
 impl PreSampledTracer for SdkTracer {
     fn sampled_context(&self, data: &mut crate::OtelData) -> OtelContext {
         let parent_cx = &data.parent_cx;
-        let builder = &mut data.builder;
+        if let Some(builder) = data.builder.as_mut() {
+            // Gather trace state
+            let (trace_id, parent_trace_flags) =
+                current_trace_state(builder, parent_cx, self.id_generator());
 
-        // Gather trace state
-        let (trace_id, parent_trace_flags) =
-            current_trace_state(builder, parent_cx, self.id_generator());
+            // Sample or defer to existing sampling decisions
+            let (flags, trace_state) = if let Some(result) = &builder.sampling_result {
+                process_sampling_result(result, parent_trace_flags)
+            } else {
+                builder.sampling_result = Some(self.should_sample().should_sample(
+                    Some(parent_cx),
+                    trace_id,
+                    &builder.name,
+                    builder.span_kind.as_ref().unwrap_or(&SpanKind::Internal),
+                    builder.attributes.as_deref().unwrap_or(&[]),
+                    builder.links.as_deref().unwrap_or(&[]),
+                ));
 
-        // Sample or defer to existing sampling decisions
-        let (flags, trace_state) = if let Some(result) = &builder.sampling_result {
-            process_sampling_result(result, parent_trace_flags)
+                process_sampling_result(
+                    builder.sampling_result.as_ref().unwrap(),
+                    parent_trace_flags,
+                )
+            }
+            .unwrap_or_default();
+
+            let span_id = builder.span_id.unwrap_or(SpanId::INVALID);
+            let span_context = SpanContext::new(trace_id, span_id, flags, false, trace_state);
+            parent_cx.with_remote_span_context(span_context)
         } else {
-            builder.sampling_result = Some(self.should_sample().should_sample(
-                Some(parent_cx),
-                trace_id,
-                &builder.name,
-                builder.span_kind.as_ref().unwrap_or(&SpanKind::Internal),
-                builder.attributes.as_deref().unwrap_or(&[]),
-                builder.links.as_deref().unwrap_or(&[]),
-            ));
-
-            process_sampling_result(
-                builder.sampling_result.as_ref().unwrap(),
-                parent_trace_flags,
-            )
+            OtelContext::new()
         }
-        .unwrap_or_default();
-
-        let span_id = builder.span_id.unwrap_or(SpanId::INVALID);
-        let span_context = SpanContext::new(trace_id, span_id, flags, false, trace_state);
-        parent_cx.with_remote_span_context(span_context)
     }
 
     fn new_trace_id(&self) -> otel::TraceId {
@@ -161,8 +163,13 @@ mod tests {
         let mut builder = SpanBuilder::from_name("empty".to_string());
         builder.span_id = Some(SpanId::from(1u64));
         builder.trace_id = None;
+        let builder = Some(builder);
         let parent_cx = OtelContext::new();
-        let cx = tracer.sampled_context(&mut OtelData { builder, parent_cx });
+        let cx = tracer.sampled_context(&mut OtelData {
+            builder,
+            parent_cx,
+            ..Default::default()
+        });
         let span = cx.span();
         let span_context = span.span_context();
 
@@ -199,7 +206,12 @@ mod tests {
             let tracer = provider.tracer("test");
             let mut builder = SpanBuilder::from_name("parent".to_string());
             builder.sampling_result = previous_sampling_result;
-            let sampled = tracer.sampled_context(&mut OtelData { builder, parent_cx });
+            let builder = Some(builder);
+            let sampled = tracer.sampled_context(&mut OtelData {
+                builder,
+                parent_cx,
+                ..Default::default()
+            });
 
             assert_eq!(
                 sampled.span().span_context().is_sampled(),

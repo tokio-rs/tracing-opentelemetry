@@ -16,15 +16,17 @@ edition = "2021"
 rust-version = "1.75.0"
 
 [features]
-default = ["tracing-log", "metrics"]
+default = ["tracing-log", "metrics", "activate_context"]
 # Enables support for exporting OpenTelemetry metrics
 metrics = ["opentelemetry/metrics","opentelemetry_sdk/metrics", "smallvec"]
 # Enables experimental support for OpenTelemetry gauge metrics
 metrics_gauge_unstable = []
+# Enables support for activating an OpenTelemetry Context on Span entry
+activate_context = []
 
 [dependencies]
-opentelemetry = { version = "0.29.0", default-features = false, features = ["trace"] }
-opentelemetry_sdk = { version = "0.29.0", default-features = false, features = ["trace"] }
+opentelemetry = { version = "=0.29.0", default-features = false, features = ["trace"] }
+opentelemetry_sdk = { version = "=0.29.0", default-features = false, features = ["trace"] }
 tracing = { version = "0.1.35", default-features = false, features = ["std"] }
 tracing-core = "0.1.28"
 tracing-subscriber = { version = "0.3.0", default-features = false, features = ["registry", "std"] }
@@ -43,17 +45,24 @@ smallvec = { version = "1.0", optional = true }
 [dev-dependencies]
 async-trait = "0.1.56"
 criterion = { version = "0.5.1", default-features = false, features = ["html_reports"] }
-opentelemetry = { version = "0.29.0", features = ["trace", "metrics"] }
-opentelemetry_sdk = { version = "0.29.0", default-features = false, features = ["trace", "rt-tokio"] }
-opentelemetry-stdout = { version = "0.29.0", features = ["trace", "metrics"] }
-opentelemetry-otlp = { version = "0.29.0", features = ["metrics", "grpc-tonic"] }
-opentelemetry-semantic-conventions = { version = "0.29.0", features = ["semconv_experimental"] }
+opentelemetry = { version = "=0.29.0", features = ["trace", "metrics"] }
+opentelemetry_sdk = { version = "=0.29.0", default-features = false, features = ["trace", "rt-tokio", "testing"] }
+opentelemetry-stdout = { version = "=0.29.0", features = ["trace", "metrics"] }
+opentelemetry-otlp = { version = "=0.29.0", features = ["metrics", "grpc-tonic"] }
+opentelemetry-semantic-conventions = { version = "=0.29.0", features = ["semconv_experimental"] }
 futures-util = { version = "0.3.17", default-features = false }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
 tracing = { version = "0.1.35", default-features = false, features = ["std", "attributes"] }
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.0", default-features = false, features = ["registry", "std", "fmt"] }
+
+[patch.crates-io]
+opentelemetry = { git = 'https://github.com/bantonsson/opentelemetry-rust.git', branch = 'ban/tracing-opentelemetry-base' }
+opentelemetry_sdk = { git = 'https://github.com/bantonsson/opentelemetry-rust.git', branch = 'ban/tracing-opentelemetry-base' }
+opentelemetry-stdout = { git = 'https://github.com/bantonsson/opentelemetry-rust.git', branch = 'ban/tracing-opentelemetry-base' }
+opentelemetry-otlp = { git = 'https://github.com/bantonsson/opentelemetry-rust.git', branch = 'ban/tracing-opentelemetry-base' }
+opentelemetry-semantic-conventions = { git = 'https://github.com/bantonsson/opentelemetry-rust.git', branch = 'ban/tracing-opentelemetry-base' }
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 pprof = { version = "0.14.0", features = ["flamegraph", "criterion"] }
