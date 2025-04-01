@@ -16,9 +16,11 @@ edition = "2021"
 rust-version = "1.75.0"
 
 [features]
-default = ["tracing-log", "metrics"]
+default = ["tracing-log", "metrics", "activate_context"]
 # Enables support for exporting OpenTelemetry metrics
 metrics = ["opentelemetry/metrics","opentelemetry_sdk/metrics", "smallvec"]
+# Enables support for activating an OpenTelemetry Context on Span entry
+activate_context = []
 
 [dependencies]
 opentelemetry = { version = "0.30.0", default-features = false, features = ["trace"] }
@@ -37,7 +39,7 @@ lazy_static = { version = "1.0.2", optional = true }
 async-trait = "0.1.56"
 criterion = { version = "0.5.1", default-features = false, features = ["html_reports"] }
 opentelemetry = { version = "0.30.0", features = ["trace", "metrics"] }
-opentelemetry_sdk = { version = "0.30.0", default-features = false, features = ["trace", "rt-tokio", "experimental_metrics_custom_reader"] }
+opentelemetry_sdk = { version = "0.30.0", default-features = false, features = ["trace", "rt-tokio", "experimental_metrics_custom_reader", "testing"] }
 opentelemetry-stdout = { version = "0.30.0", features = ["trace", "metrics"] }
 opentelemetry-otlp = { version = "0.30.0", features = ["metrics", "grpc-tonic"] }
 opentelemetry-semantic-conventions = { version = "0.30.0", features = ["semconv_experimental"] }
