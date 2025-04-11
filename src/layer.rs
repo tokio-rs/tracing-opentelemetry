@@ -5,7 +5,7 @@ use once_cell::unsync;
 #[cfg(feature = "activate_context")]
 use opentelemetry::ContextGuard;
 use opentelemetry::{
-    trace::{self as otel, noop, SpanBuilder, SpanKind, Status, TraceContextExt},
+    trace::{self as otel, noop, Span, SpanBuilder, SpanKind, Status, TraceContextExt},
     Context as OtelContext, Key, KeyValue, StringValue, Value,
 };
 #[cfg(feature = "activate_context")]
@@ -1314,30 +1314,31 @@ where
             end_time,
         }) = otel_data
         {
-            let cx = if let Some(builder) = builder {
-                let span = builder.start_with_context(&self.tracer, &parent_cx);
-                parent_cx.with_span(span)
-            } else {
-                parent_cx
-            };
-
-            let span = cx.span();
             // Append busy/idle timings when enabled.
-            if let Some(timings) = timings {
+            let timings = timings.and_then(|timings| {
                 let busy_ns = Key::new("busy_ns");
                 let idle_ns = Key::new("idle_ns");
 
-                span.set_attributes(vec![
+                Some(vec![
                     KeyValue::new(busy_ns, timings.busy),
                     KeyValue::new(idle_ns, timings.idle),
-                ]);
-            }
+                ])
+            });
 
-            if let Some(end_time) = end_time {
-                span.end_with_timestamp(end_time);
+            if let Some(builder) = builder {
+                // Don't create the context here just to get a SpanRef since it's costly
+                let mut span = builder.start_with_context(&self.tracer, &parent_cx);
+                timings.map(|timings| span.set_attributes(timings));
+                if let Some(end_time) = end_time {
+                    span.end_with_timestamp(end_time);
+                } else {
+                    span.end();
+                }
             } else {
-                span.end();
-            }
+                let span = parent_cx.span();
+                timings.map(|timings| span.set_attributes(timings));
+                end_time.map_or_else(|| span.end(), |end_time| span.end_with_timestamp(end_time));
+            };
         }
     }
 
