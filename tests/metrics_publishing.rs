@@ -625,7 +625,7 @@ where
                                 .data_points
                                 .iter()
                                 .map(|data_point| data_point.value)
-                                .last()
+                                .next_back()
                                 .unwrap()
                         );
 
