@@ -1235,21 +1235,6 @@ where
             let mut extensions = span.extensions_mut();
 
             if let Some(otel_data) = extensions.get_mut::<OtelData>() {
-                self.start_cx(otel_data);
-                let span = otel_data.parent_cx.span();
-
-                // TODO:ban fix this with accessor in SpanRef that can check the span status
-                // if builder.status == otel::Status::Unset
-                //     && *meta.level() == tracing_core::Level::ERROR
-                // There is no test that checks this behavior
-                if *meta.level() == tracing_core::Level::ERROR {
-                    span.set_status(otel::Status::error(""));
-                }
-
-                if let Some(builder_updates) = builder_updates {
-                    builder_updates.update_span(&span);
-                }
-
                 if self.location {
                     #[cfg(not(feature = "tracing-log"))]
                     let normalized_meta: Option<tracing_core::Metadata<'_>> = None;
@@ -1281,7 +1266,31 @@ where
                     }
                 }
 
-                span.add_event(otel_event.name, otel_event.attributes);
+                if let Some(builder) = otel_data.builder.as_mut() {
+                    if builder.status == otel::Status::Unset
+                        && *meta.level() == tracing_core::Level::ERROR
+                    {
+                        builder.status = otel::Status::error("");
+                    }
+                    if let Some(builder_updates) = builder_updates {
+                        builder_updates.apply(builder);
+                    }
+                    if let Some(ref mut events) = builder.events {
+                        events.push(otel_event);
+                    } else {
+                        builder.events = Some(vec![otel_event]);
+                    }
+                } else {
+                    let span = otel_data.parent_cx.span();
+                    // TODO:ban fix this with accessor in SpanRef that can check the span status
+                    if *meta.level() == tracing_core::Level::ERROR {
+                        span.set_status(otel::Status::error(""));
+                    }
+                    if let Some(builder_updates) = builder_updates {
+                        builder_updates.update_span(&span);
+                    }
+                    span.add_event(otel_event.name, otel_event.attributes);
+                }
             }
         };
     }
