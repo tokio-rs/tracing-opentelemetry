@@ -10,12 +10,12 @@ use opentelemetry::{
 };
 #[cfg(feature = "activate_context")]
 use std::cell::RefCell;
-use std::fmt;
 use std::marker;
 use std::thread;
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "wasi"))))]
 use std::time::Instant;
 use std::{any::TypeId, borrow::Cow};
+use std::{fmt, vec};
 use tracing_core::span::{self, Attributes, Id, Record};
 use tracing_core::{field, Event, Subscriber};
 #[cfg(feature = "tracing-log")]
@@ -1140,7 +1140,7 @@ where
     fn on_follows_from(&self, id: &Id, follows: &Id, ctx: Context<S>) {
         let span = ctx.span(id).expect("Span not found, this is a bug");
         let mut extensions = span.extensions_mut();
-        let _data = extensions
+        let data = extensions
             .get_mut::<OtelData>()
             .expect("Missing otel data span extensions");
 
@@ -1149,26 +1149,20 @@ where
         // uses the same reasoning as `parent_context` above.
         if let Some(follows_span) = ctx.span(follows) {
             let mut follows_extensions = follows_span.extensions_mut();
-            let _follows_data = follows_extensions
+            let follows_data = follows_extensions
                 .get_mut::<OtelData>()
                 .expect("Missing otel data span extensions");
-            // TODO:ban There are no tests that check this code :(
-            // TODO:ban if the follows span has a span builder the follows span should be _started_ here
-            // let follows_link = self.with_started_cx(follows_data, &|cx| {
-            //     otel::Link::with_context(cx.span().span_context().clone())
-            // });
-            // let follows_context = self
-            //     .tracer
-            //     .sampled_context(follows_data)
-            //     .span()
-            //     .span_context()
-            //     .clone();
-            // let follows_link = otel::Link::with_context(follows_context);
-            // if let Some(ref mut links) = data.builder.links {
-            //     links.push(follows_link);
-            // } else {
-            //     data.builder.links = Some(vec![follows_link]);
-            // }
+            let follows_context =
+                self.with_started_cx(follows_data, &|cx| cx.span().span_context().clone());
+            if let Some(builder) = data.builder.as_mut() {
+                if let Some(ref mut links) = builder.links {
+                    links.push(otel::Link::with_context(follows_context));
+                } else {
+                    builder.links = Some(vec![otel::Link::with_context(follows_context)]);
+                }
+            } else {
+                data.parent_cx.span().add_link(follows_context, vec![]);
+            }
         }
     }
 
@@ -2088,7 +2082,115 @@ mod tests {
         assert_eq!(child1.parent_span_id, root.span_context.span_id());
         assert_eq!(child2.parent_span_id, child1.span_context.span_id());
 
-        // This is surprising, the parent should be `child1`, but is 'root'.
+        // The parent should be `child1`
         assert_eq!(child3.parent_span_id, child1.span_context.span_id());
+    }
+
+    #[test]
+    fn follows_from_adds_link() {
+        use crate::OpenTelemetrySpanExt;
+        let mut tracer = TestTracer::default();
+        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+
+        let span1_id = tracing::subscriber::with_default(subscriber, || {
+            let span2 = tracing::debug_span!("span2");
+            let span1 = tracing::debug_span!("span1");
+
+            // Ensure that span2 is started
+            let _ = span2.context();
+
+            // Establish follows_from relationship
+            span2.follows_from(&span1);
+
+            // Enter span2 to ensure it's exported
+            let _guard = span2.enter();
+
+            // Get span ID for later verification
+            span1.context().span().span_context().span_id()
+        });
+
+        let spans = tracer.spans();
+        // Check that both spans are exported
+        assert_eq!(spans.len(), 2, "Expected two spans to be exported");
+        assert!(spans.iter().any(|span| span.name == "span1"));
+        let span2 = spans
+            .iter()
+            .find(|span| span.name == "span2")
+            .expect("Expected span2 to be exported");
+
+        // Collect span2 links
+        let links = span2
+            .links
+            .iter()
+            .map(|link| link.span_context.span_id())
+            .collect::<Vec<_>>();
+
+        // Verify that span2 has a link to span1
+        assert_eq!(
+            links.len(),
+            1,
+            "Expected span to have one link from follows_from relationship"
+        );
+
+        assert!(
+            links.contains(&span1_id),
+            "Link should point to the correct source span"
+        );
+    }
+
+    #[test]
+    fn follows_from_multiple_links() {
+        use crate::OpenTelemetrySpanExt;
+        let mut tracer = TestTracer::default();
+        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+
+        let (span1_id, span2_id) = tracing::subscriber::with_default(subscriber, || {
+            let span3 = tracing::debug_span!("span3");
+            let span2 = tracing::debug_span!("span2");
+            let span1 = tracing::debug_span!("span1");
+
+            // Establish multiple follows_from relationships
+            span3.follows_from(&span1);
+            span3.follows_from(&span2);
+
+            // Enter span3 to ensure it's exported
+            let _guard = span3.enter();
+
+            // Get span IDs for later verification
+            (
+                span1.context().span().span_context().span_id(),
+                span2.context().span().span_context().span_id(),
+            )
+        });
+
+        let spans = tracer.spans();
+        // Check that all three spans are exported
+        assert_eq!(spans.len(), 3, "Expected three spans to be exported");
+        assert!(spans.iter().any(|span| span.name == "span1"));
+        assert!(spans.iter().any(|span| span.name == "span2"));
+        let span3 = spans
+            .iter()
+            .find(|span| span.name == "span3")
+            .expect("Expected span3 to be exported");
+
+        // Collect span3 links
+        let links = span3
+            .links
+            .iter()
+            .map(|link| link.span_context.span_id())
+            .collect::<Vec<_>>();
+
+        // Verify that span3 has multiple links and they point to the correct spans
+        assert_eq!(
+            links.len(),
+            2,
+            "Expected span to have two links from follows_from relationships"
+        );
+
+        // Verify that the links point to the correct spans in the correct order
+        assert!(
+            links[0] == span1_id && links[1] == span2_id,
+            "Links should point to the correct source spans"
+        );
     }
 }
