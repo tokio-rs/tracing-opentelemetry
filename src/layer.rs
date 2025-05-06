@@ -580,18 +580,10 @@ impl field::Visit for SpanAttributeVisitor<'_> {
     }
 }
 
-pub trait LayerTracer: otel::Tracer {}
-impl<T> LayerTracer for T
-where
-    T: otel::Tracer,
-    T::Span: Send + Sync,
-{
-}
-
 impl<S, T> OpenTelemetryLayer<S, T>
 where
     S: Subscriber + for<'span> LookupSpan<'span>,
-    T: LayerTracer + 'static,
+    T: otel::Tracer + 'static,
     T::Span: Send + Sync,
 {
     /// Set the [`Tracer`] that this layer will use to produce and track
@@ -684,7 +676,7 @@ where
     /// ```
     pub fn with_tracer<Tracer>(self, tracer: Tracer) -> OpenTelemetryLayer<S, Tracer>
     where
-        Tracer: LayerTracer + 'static,
+        Tracer: otel::Tracer + 'static,
         Tracer::Span: Send + Sync,
     {
         OpenTelemetryLayer {
@@ -1001,7 +993,7 @@ type IdContextGuardStack = IdValueStack<ContextGuard>;
 impl<S, T> Layer<S> for OpenTelemetryLayer<S, T>
 where
     S: Subscriber + for<'span> LookupSpan<'span>,
-    T: LayerTracer + 'static,
+    T: otel::Tracer + 'static,
     T::Span: Send + Sync,
 {
     /// Creates an [OpenTelemetry `Span`] for the corresponding [tracing `Span`].
