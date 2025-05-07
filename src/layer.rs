@@ -891,7 +891,7 @@ where
                             .get_mut::<OtelData>()
                             .map(|data| self.with_started_cx(data, &|cx| cx.clone()))
                     })
-                    .unwrap_or_else(|| OtelContext::current())
+                    .unwrap_or_else(OtelContext::current)
             }
         } else {
             OtelContext::default()
@@ -907,8 +907,8 @@ where
     /// * `dispatch` - A reference to the tracing dispatch, used to access the subscriber
     /// * `id` - The ID of the span to look up
     /// * `f` - A callback function that receives a mutable reference to the span's `OtelData`
-    ///         This callback is used to manipulate or extract information from the OpenTelemetry context
-    ///         associated with the tracing span
+    ///   This callback is used to manipulate or extract information from the OpenTelemetry context
+    ///   associated with the tracing span
     ///
     fn get_context(dispatch: &tracing::Dispatch, id: &span::Id, f: &mut dyn FnMut(&mut OtelData)) {
         let subscriber = dispatch
@@ -1332,20 +1332,22 @@ where
         }) = otel_data
         {
             // Append busy/idle timings when enabled.
-            let timings = timings.and_then(|timings| {
+            let timings = timings.map(|timings| {
                 let busy_ns = Key::new("busy_ns");
                 let idle_ns = Key::new("idle_ns");
 
-                Some(vec![
+                vec![
                     KeyValue::new(busy_ns, timings.busy),
                     KeyValue::new(idle_ns, timings.idle),
-                ])
+                ]
             });
 
             if let Some(builder) = builder {
                 // Don't create the context here just to get a SpanRef since it's costly
                 let mut span = builder.start_with_context(&self.tracer, &parent_cx);
-                timings.map(|timings| span.set_attributes(timings));
+                if let Some(timings) = timings {
+                    span.set_attributes(timings)
+                };
                 if let Some(end_time) = end_time {
                     span.end_with_timestamp(end_time);
                 } else {
@@ -1353,7 +1355,9 @@ where
                 }
             } else {
                 let span = parent_cx.span();
-                timings.map(|timings| span.set_attributes(timings));
+                if let Some(timings) = timings {
+                    span.set_attributes(timings)
+                };
                 end_time.map_or_else(|| span.end(), |end_time| span.end_with_timestamp(end_time));
             };
         }
