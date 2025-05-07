@@ -1,7 +1,8 @@
 use crate::layer::WithContext;
+use crate::OtelData;
 use opentelemetry::{
     time,
-    trace::{SpanContext, Status},
+    trace::{SpanContext, Status, TraceContextExt},
     Context, Key, KeyValue, Value,
 };
 use std::{borrow::Cow, time::SystemTime};
@@ -214,18 +215,36 @@ pub trait OpenTelemetrySpanExt {
 }
 
 impl OpenTelemetrySpanExt for tracing::Span {
+    ///
+    /// Allows us to set the parent context of this span. This method exists primarily to allow
+    /// us to pull in distributed_ incoming context - e.g. span IDs, etc - that have been read
+    /// into an existing context.
+    ///
+    /// A span's parent should only be set _once_, for the purpose described above.
+    /// Additionally, once a span has been fully built - and the SpanBuilder has been consumed -
+    /// the parent _cannot_ be mutated.
+    ///
     fn set_parent(&self, cx: Context) {
         let mut cx = Some(cx);
         self.with_subscriber(move |(id, subscriber)| {
             let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
                 return;
             };
-            get_context.with_context(subscriber, id, move |data, _tracer| {
-                let Some(cx) = cx.take() else {
+            // Set the parent OTel for the current span
+            get_context.with_context(subscriber, id, move |data| {
+                let Some(new_cx) = cx.take() else {
                     return;
                 };
-                data.parent_cx = cx;
-                data.builder.sampling_result = None;
+                // Create a new context with the new parent but preserve our span.
+                // NOTE - if the span has been created - if we have _already_
+                // consumed our SpanBuilder_ - we can no longer mutate our parent!
+                // This is an intentional design decision.
+                if let Some(builder) = &mut data.builder {
+                    // If we still have a builder, update it to use the new parent context
+                    // when it's eventually built
+                    data.parent_cx = new_cx;
+                    builder.sampling_result = None;
+                }
             });
         });
     }
@@ -238,20 +257,23 @@ impl OpenTelemetrySpanExt for tracing::Span {
         if cx.is_valid() {
             let mut cx = Some(cx);
             let mut att = Some(attributes);
+            // TODO:ban add add version for SpanRef
             self.with_subscriber(move |(id, subscriber)| {
                 let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
                     return;
                 };
-                get_context.with_context(subscriber, id, move |data, _tracer| {
+                get_context.with_context(subscriber, id, move |data| {
                     let Some(cx) = cx.take() else {
                         return;
                     };
                     let attr = att.take().unwrap_or_default();
                     let follows_link = opentelemetry::trace::Link::new(cx, attr, 0);
-                    data.builder
-                        .links
-                        .get_or_insert_with(|| Vec::with_capacity(1))
-                        .push(follows_link);
+                    if let Some(builder) = data.builder.as_mut() {
+                        builder
+                            .links
+                            .get_or_insert_with(|| Vec::with_capacity(1))
+                            .push(follows_link);
+                    }
                 });
             });
         }
@@ -263,9 +285,10 @@ impl OpenTelemetrySpanExt for tracing::Span {
             let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
                 return;
             };
-            get_context.with_context(subscriber, id, |builder, tracer| {
-                cx = Some(tracer.sampled_context(builder));
-            })
+            // If our span hasn't been built, we should build it and get the context in one call
+            get_context.with_activated_context(subscriber, id, |data: &mut OtelData| {
+                cx = Some(data.parent_cx.clone());
+            });
         });
 
         cx.unwrap_or_default()
@@ -278,17 +301,22 @@ impl OpenTelemetrySpanExt for tracing::Span {
             };
             let mut key = Some(key.into());
             let mut value = Some(value.into());
-            get_context.with_context(subscriber, id, move |builder, _| {
-                if builder.builder.attributes.is_none() {
-                    builder.builder.attributes = Some(Default::default());
+            get_context.with_context(subscriber, id, move |data| {
+                if let Some(builder) = data.builder.as_mut() {
+                    if builder.attributes.is_none() {
+                        builder.attributes = Some(Default::default());
+                    }
+                    builder
+                        .attributes
+                        .as_mut()
+                        .unwrap()
+                        .push(KeyValue::new(key.take().unwrap(), value.take().unwrap()));
+                } else {
+                    let span = data.parent_cx.span();
+                    let key_value = KeyValue::new(key.take().unwrap(), value.take().unwrap());
+                    span.set_attribute(key_value);
                 }
-                builder
-                    .builder
-                    .attributes
-                    .as_mut()
-                    .unwrap()
-                    .push(KeyValue::new(key.take().unwrap(), value.take().unwrap()));
-            })
+            });
         });
     }
 
@@ -298,8 +326,13 @@ impl OpenTelemetrySpanExt for tracing::Span {
             let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
                 return;
             };
-            get_context.with_context(subscriber, id, move |builder, _| {
-                builder.builder.status = status.take().unwrap();
+            get_context.with_context(subscriber, id, move |data| {
+                if let Some(builder) = data.builder.as_mut() {
+                    builder.status = status.take().unwrap();
+                } else {
+                    let span = data.parent_cx.span();
+                    span.set_status(status.take().unwrap());
+                }
             });
         });
     }
@@ -321,11 +354,19 @@ impl OpenTelemetrySpanExt for tracing::Span {
             let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
                 return;
             };
-            get_context.with_context(subscriber, id, move |data, _tracer| {
+            get_context.with_context(subscriber, id, move |data| {
                 let Some(event) = event.take() else {
                     return;
                 };
-                data.builder.events.get_or_insert_with(Vec::new).push(event);
+                if let Some(builder) = data.builder.as_mut() {
+                    builder
+                        .events
+                        .get_or_insert_with(|| Vec::with_capacity(1))
+                        .push(event);
+                } else {
+                    let span = data.parent_cx.span();
+                    span.add_event_with_timestamp(event.name, event.timestamp, event.attributes);
+                }
             });
         });
     }

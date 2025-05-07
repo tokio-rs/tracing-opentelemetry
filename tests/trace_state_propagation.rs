@@ -121,8 +121,12 @@ fn sampling_decision_respects_new_parent() {
 
     tracing::subscriber::with_default(subscriber, || {
         let child = tracing::debug_span!("child");
-        child.context(); // force a sampling decision
+
+        // Observation: if you force the _child_ to materialize before the parent, e.g.,
+        // if you swap these two lines - bad things will happen, and we shouldn't support
+        // this.
         child.set_parent(Context::current_with_span(root_span));
+        child.context(); // force a sampling decision
     });
 
     drop(provider); // flush all spans

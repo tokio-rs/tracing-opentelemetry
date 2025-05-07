@@ -131,6 +131,11 @@ mod span_ext;
 /// Protocols for OpenTelemetry Tracers that are compatible with Tracing
 mod tracer;
 
+#[cfg(feature = "activate_context")]
+mod stack;
+
+use std::time::SystemTime;
+
 pub use layer::{layer, OpenTelemetryLayer};
 
 #[cfg(feature = "metrics")]
@@ -141,13 +146,15 @@ pub use tracer::PreSampledTracer;
 /// Per-span OpenTelemetry data tracked by this crate.
 ///
 /// Useful for implementing [PreSampledTracer] in alternate otel SDKs.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct OtelData {
     /// The parent otel `Context` for the current tracing span.
     pub parent_cx: opentelemetry::Context,
 
     /// The otel span data recorded during the current tracing span.
-    pub builder: opentelemetry::trace::SpanBuilder,
+    pub builder: Option<opentelemetry::trace::SpanBuilder>,
+
+    end_time: Option<SystemTime>,
 }
 
 pub(crate) mod time {

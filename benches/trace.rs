@@ -264,9 +264,7 @@ where
         let span = ctx.span(&id).expect("Span not found, this is a bug");
         let mut extensions = span.extensions_mut();
 
-        if let Some(builder) = extensions.remove::<SpanBuilder>() {
-            builder.with_end_time(SystemTime::now());
-        }
+        extensions.remove::<SpanBuilder>();
     }
 }
 
