@@ -1,5 +1,11 @@
 # Unreleased
 
+### Breaking Changes
+
+- Upgrade from opentelemetry 0.29.0 to 0.30.0. Refer to the upstream
+  [changelog](https://github.com/open-telemetry/opentelemetry-rust/blob/main/opentelemetry-sdk/CHANGELOG.md#0300)
+  for more information.
+
 ### Added
 
 - Add `OpenTelemetrySpanExt::add_event` and `OpenTelemetrySpanExt::add_event_with_timestamp` 
