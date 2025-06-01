@@ -1,5 +1,9 @@
 # Unreleased
 
+### Removed
+
+- Feature `metrics_gauge_unstable` since metrics gauge are stable in upstream now.
+
 # 0.31.0 (June 2, 2025)
 
 ### Breaking Changes
