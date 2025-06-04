@@ -23,7 +23,7 @@ use web_time::Instant;
 const SPAN_NAME_FIELD: &str = "otel.name";
 const SPAN_KIND_FIELD: &str = "otel.kind";
 const SPAN_STATUS_CODE_FIELD: &str = "otel.status_code";
-const SPAN_STATUS_MESSAGE_FIELD: &str = "otel.status_message";
+const SPAN_STATUS_DESCRIPTION_FIELD: &str = "otel.status_description";
 
 const EVENT_EXCEPTION_NAME: &str = "exception";
 const FIELD_EXCEPTION_MESSAGE: &str = "exception.message";
@@ -442,7 +442,7 @@ impl field::Visit for SpanAttributeVisitor<'_> {
             SPAN_NAME_FIELD => self.span_builder_updates.name = Some(value.to_string().into()),
             SPAN_KIND_FIELD => self.span_builder_updates.span_kind = str_to_span_kind(value),
             SPAN_STATUS_CODE_FIELD => self.span_builder_updates.status = Some(str_to_status(value)),
-            SPAN_STATUS_MESSAGE_FIELD => {
+            SPAN_STATUS_DESCRIPTION_FIELD => {
                 self.span_builder_updates.status = Some(otel::Status::error(value.to_string()))
             }
             _ => self.record(KeyValue::new(field.name(), value.to_string())),
@@ -462,7 +462,7 @@ impl field::Visit for SpanAttributeVisitor<'_> {
             SPAN_STATUS_CODE_FIELD => {
                 self.span_builder_updates.status = Some(str_to_status(&format!("{:?}", value)))
             }
-            SPAN_STATUS_MESSAGE_FIELD => {
+            SPAN_STATUS_DESCRIPTION_FIELD => {
                 self.span_builder_updates.status = Some(otel::Status::error(format!("{:?}", value)))
             }
             _ => self.record(KeyValue::new(
@@ -1374,14 +1374,14 @@ mod tests {
     }
 
     #[test]
-    fn span_status_message() {
+    fn span_status_description() {
         let tracer = TestTracer(Arc::new(Mutex::new(None)));
         let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
 
         let message = "message";
 
         tracing::subscriber::with_default(subscriber, || {
-            tracing::debug_span!("request", otel.status_message = message);
+            tracing::debug_span!("request", otel.status_description = message);
         });
 
         let recorded_status_message = tracer
