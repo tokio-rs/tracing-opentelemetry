@@ -34,6 +34,14 @@ use opentelemetry_sdk::trace::{IdGenerator, Tracer as SdkTracer};
 /// [`OpenTelemetrySpanExt::set_parent`]: crate::OpenTelemetrySpanExt::set_parent
 /// [`OpenTelemetrySpanExt::context`]: crate::OpenTelemetrySpanExt::context
 /// [`Context`]: opentelemetry::Context
+#[rustversion::attr(
+    since(1.78),
+    diagnostic::on_unimplemented(
+        note = "Make sure you're using correct `opentelemetry` versions compatible with this \
+            `tracing-opentelemetry`. The `opentelemetry` versions are usually one version lower \
+            than `tracing-opentelemetry`."
+    )
+)]
 pub trait PreSampledTracer {
     /// Produce an otel context containing an active and pre-sampled span for
     /// the given span builder data.
