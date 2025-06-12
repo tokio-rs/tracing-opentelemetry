@@ -48,6 +48,13 @@
 //! [opentelemetry crate]: https://github.com/open-telemetry/opentelemetry-rust
 //! [spec repository]: https://github.com/open-telemetry/opentelemetry-specification
 //!
+//! ### OpenTelemetry Logging
+//!
+//! Logging to OpenTelemetry collectors is not supported by this crate, only traces and metrics are.
+//! If you need to export logs through OpenTelemetry, consider [`opentelemetry-appender-tracing`].
+//!
+//! [`opentelemetry-appender-tracing`]: https://crates.io/crates/opentelemetry-appender-tracing
+//!
 //! ## Examples
 //!
 //! ```
