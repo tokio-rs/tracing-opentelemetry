@@ -41,10 +41,11 @@
 //!
 //! ### Stability Status
 //!
-//! The OpenTelemetry specification is currently in beta so some breaking
-//! changes may still occur on the path to 1.0. You can follow the changes via
-//! the [spec repository] to track progress toward stabilization.
+//! The OpenTelemetry tracing specification is stable but the underlying [opentelemetry crate] is
+//! not so some breaking changes will still occur in this crate as well. Metrics are not yet fully
+//! stable. You can read the specification via the [spec repository].
 //!
+//! [opentelemetry crate]: https://github.com/open-telemetry/opentelemetry-rust
 //! [spec repository]: https://github.com/open-telemetry/opentelemetry-specification
 //!
 //! ## Examples
