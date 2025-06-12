@@ -22,9 +22,12 @@
 //! * `otel.name`: Override the span name sent to OpenTelemetry exporters.
 //!   Setting this field is useful if you want to display non-static information
 //!   in your span name.
-//! * `otel.kind`: Set the span kind to one of the supported OpenTelemetry [span kinds].
+//! * `otel.kind`: Set the span kind to one of the supported OpenTelemetry [span kinds]. These must
+//!   be specified as strings such as `"client"` or `"server"`. If it is not specified, the span is
+//!   assumed to be internal.
 //! * `otel.status_code`: Set the span status code to one of the supported OpenTelemetry [span status codes].
-//! * `otel.status_message`: Set the span status message.
+//! * `otel.status_description`: Set the span description of the status. This should be used only if
+//!   `otel.status_code` is also set.
 //!
 //! [span kinds]: opentelemetry::trace::SpanKind
 //! [span status codes]: opentelemetry::trace::Status
@@ -33,7 +36,7 @@
 //!
 //! OpenTelemetry defines conventional names for attributes of common
 //! operations. These names can be assigned directly as fields, e.g.
-//! `trace_span!("request", "otel.kind" = %SpanKind::Client, "url.full" = ..)`, and they
+//! `trace_span!("request", "server.port" = 80, "url.full" = ..)`, and they
 //! will be passed through to your configured OpenTelemetry exporter. You can
 //! find the full list of the operations and their expected field names in the
 //! [semantic conventions] spec.
