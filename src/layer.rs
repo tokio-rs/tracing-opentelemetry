@@ -944,9 +944,12 @@ where
         let mut extensions = span.extensions_mut();
 
         if let Some(timings) = extensions.get_mut::<Timings>() {
-            let now = Instant::now();
-            timings.idle += (now - timings.last).as_nanos() as i64;
-            timings.last = now;
+            if timings.entered_count == 0 {
+                let now = Instant::now();
+                timings.idle += (now - timings.last).as_nanos() as i64;
+                timings.last = now;
+            }
+            timings.entered_count += 1;
         }
     }
 
@@ -963,9 +966,12 @@ where
         }
 
         if let Some(timings) = extensions.get_mut::<Timings>() {
-            let now = Instant::now();
-            timings.busy += (now - timings.last).as_nanos() as i64;
-            timings.last = now;
+            timings.entered_count -= 1;
+            if timings.entered_count == 0 {
+                let now = Instant::now();
+                timings.busy += (now - timings.last).as_nanos() as i64;
+                timings.last = now;
+            }
         }
     }
 
@@ -1192,6 +1198,7 @@ struct Timings {
     idle: i64,
     busy: i64,
     last: Instant,
+    entered_count: u64,
 }
 
 impl Timings {
@@ -1200,6 +1207,7 @@ impl Timings {
             idle: 0,
             busy: 0,
             last: Instant::now(),
+            entered_count: 0,
         }
     }
 }
