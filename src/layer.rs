@@ -1,5 +1,4 @@
 use crate::{OtelData, PreSampledTracer};
-use once_cell::unsync;
 use opentelemetry::{
     trace::{self as otel, noop, SpanBuilder, SpanKind, Status, TraceContextExt},
     Context as OtelContext, Key, KeyValue, StringValue, Value,
@@ -848,7 +847,7 @@ where
 }
 
 thread_local! {
-    static THREAD_ID: unsync::Lazy<u64> = unsync::Lazy::new(|| {
+    static THREAD_ID: u64 = {
         // OpenTelemetry's semantic conventions require the thread ID to be
         // recorded as an integer, but `std::thread::ThreadId` does not expose
         // the integer value on stable, so we have to convert it to a `usize` by
@@ -857,7 +856,7 @@ thread_local! {
         // TODO(eliza): once `std::thread::ThreadId::as_u64` is stabilized
         // (https://github.com/rust-lang/rust/issues/67939), just use that.
         thread_id_integer(thread::current().id())
-    });
+    };
 }
 
 impl<S, T> Layer<S> for OpenTelemetryLayer<S, T>
@@ -911,7 +910,7 @@ where
         }
 
         if self.with_threads {
-            THREAD_ID.with(|id| builder_attrs.push(KeyValue::new("thread.id", **id as i64)));
+            THREAD_ID.with(|id| builder_attrs.push(KeyValue::new("thread.id", *id as i64)));
             if let Some(name) = std::thread::current().name() {
                 // TODO(eliza): it's a bummer that we have to allocate here, but
                 // we can't easily get the string as a `static`. it would be
