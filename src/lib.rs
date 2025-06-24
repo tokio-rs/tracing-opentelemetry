@@ -117,8 +117,6 @@ mod metrics;
 mod layer;
 /// Span extension which enables OpenTelemetry context management.
 mod span_ext;
-/// Protocols for OpenTelemetry Tracers that are compatible with Tracing
-mod tracer;
 
 #[cfg(feature = "activate_context")]
 mod stack;
@@ -130,13 +128,10 @@ pub use layer::{layer, OpenTelemetryLayer};
 #[cfg(feature = "metrics")]
 pub use metrics::MetricsLayer;
 pub use span_ext::OpenTelemetrySpanExt;
-pub use tracer::PreSampledTracer;
 
 /// Per-span OpenTelemetry data tracked by this crate.
-///
-/// Useful for implementing [PreSampledTracer] in alternate otel SDKs.
 #[derive(Debug, Clone, Default)]
-pub struct OtelData {
+struct OtelData {
     /// The parent otel `Context` for the current tracing span.
     pub parent_cx: opentelemetry::Context,
 
