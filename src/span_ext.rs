@@ -239,11 +239,10 @@ impl OpenTelemetrySpanExt for tracing::Span {
                 // NOTE - if the span has been created - if we have _already_
                 // consumed our SpanBuilder_ - we can no longer mutate our parent!
                 // This is an intentional design decision.
-                if let Some(builder) = &mut data.builder {
-                    // If we still have a builder, update it to use the new parent context
-                    // when it's eventually built
+                if data.builder.is_some() {
+                    // If we still have a builder, update the data so it uses the
+                    // new parent context when it's eventually built
                     data.parent_cx = new_cx;
-                    builder.sampling_result = None;
                 }
             });
         });
@@ -257,7 +256,6 @@ impl OpenTelemetrySpanExt for tracing::Span {
         if cx.is_valid() {
             let mut cx = Some(cx);
             let mut att = Some(attributes);
-            // TODO:ban add add version for SpanRef
             self.with_subscriber(move |(id, subscriber)| {
                 let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
                     return;
@@ -273,6 +271,9 @@ impl OpenTelemetrySpanExt for tracing::Span {
                             .links
                             .get_or_insert_with(|| Vec::with_capacity(1))
                             .push(follows_link);
+                    } else {
+                        let span = data.parent_cx.span();
+                        span.add_link(follows_link.span_context, follows_link.attributes);
                     }
                 });
             });
