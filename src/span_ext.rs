@@ -1,5 +1,5 @@
-use crate::layer::WithContext;
 use crate::OtelData;
+use crate::{layer::WithContext, OtelDataState};
 use opentelemetry::{
     time,
     trace::{SpanContext, Status, TraceContextExt},
@@ -239,10 +239,13 @@ impl OpenTelemetrySpanExt for tracing::Span {
                 // NOTE - if the span has been created - if we have _already_
                 // consumed our SpanBuilder_ - we can no longer mutate our parent!
                 // This is an intentional design decision.
-                if data.builder.is_some() {
-                    // If we still have a builder, update the data so it uses the
-                    // new parent context when it's eventually built
-                    data.parent_cx = new_cx;
+                match &mut data.state {
+                    OtelDataState::Builder { parent_cx, .. } => {
+                        // If we still have a builder, update the data so it uses the
+                        // new parent context when it's eventually built
+                        *parent_cx = new_cx;
+                    }
+                    OtelDataState::Context { .. } => (),
                 }
             });
         });
@@ -266,14 +269,21 @@ impl OpenTelemetrySpanExt for tracing::Span {
                     };
                     let attr = att.take().unwrap_or_default();
                     let follows_link = opentelemetry::trace::Link::new(cx, attr, 0);
-                    if let Some(builder) = data.builder.as_mut() {
-                        builder
-                            .links
-                            .get_or_insert_with(|| Vec::with_capacity(1))
-                            .push(follows_link);
-                    } else {
-                        let span = data.parent_cx.span();
-                        span.add_link(follows_link.span_context, follows_link.attributes);
+                    match &mut data.state {
+                        OtelDataState::Builder { builder, .. } => {
+                            // If we still have a builder, update the data so it uses the
+                            // new link when it's eventually built
+                            builder
+                                .links
+                                .get_or_insert_with(|| Vec::with_capacity(1))
+                                .push(follows_link);
+                        }
+                        OtelDataState::Context { current_cx } => {
+                            // If we have a context, add the link to the span in the context
+                            current_cx
+                                .span()
+                                .add_link(follows_link.span_context, follows_link.attributes);
+                        }
                     }
                 });
             });
@@ -288,7 +298,9 @@ impl OpenTelemetrySpanExt for tracing::Span {
             };
             // If our span hasn't been built, we should build it and get the context in one call
             get_context.with_activated_context(subscriber, id, |data: &mut OtelData| {
-                cx = Some(data.parent_cx.clone());
+                if let OtelDataState::Context { current_cx } = &data.state {
+                    cx = Some(current_cx.clone());
+                }
             });
         });
 
@@ -303,20 +315,23 @@ impl OpenTelemetrySpanExt for tracing::Span {
             let mut key = Some(key.into());
             let mut value = Some(value.into());
             get_context.with_context(subscriber, id, move |data| {
-                if let Some(builder) = data.builder.as_mut() {
-                    if builder.attributes.is_none() {
-                        builder.attributes = Some(Default::default());
+                match &mut data.state {
+                    OtelDataState::Builder { builder, .. } => {
+                        if builder.attributes.is_none() {
+                            builder.attributes = Some(Default::default());
+                        }
+                        builder
+                            .attributes
+                            .as_mut()
+                            .unwrap()
+                            .push(KeyValue::new(key.take().unwrap(), value.take().unwrap()));
                     }
-                    builder
-                        .attributes
-                        .as_mut()
-                        .unwrap()
-                        .push(KeyValue::new(key.take().unwrap(), value.take().unwrap()));
-                } else {
-                    let span = data.parent_cx.span();
-                    let key_value = KeyValue::new(key.take().unwrap(), value.take().unwrap());
-                    span.set_attribute(key_value);
-                }
+                    OtelDataState::Context { current_cx } => {
+                        let span = current_cx.span();
+                        let key_value = KeyValue::new(key.take().unwrap(), value.take().unwrap());
+                        span.set_attribute(key_value);
+                    }
+                };
             });
         });
     }
@@ -327,11 +342,12 @@ impl OpenTelemetrySpanExt for tracing::Span {
             let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
                 return;
             };
-            get_context.with_context(subscriber, id, move |data| {
-                if let Some(builder) = data.builder.as_mut() {
+            get_context.with_context(subscriber, id, move |data| match &mut data.state {
+                OtelDataState::Builder { builder, .. } => {
                     builder.status = status.take().unwrap();
-                } else {
-                    let span = data.parent_cx.span();
+                }
+                OtelDataState::Context { current_cx } => {
+                    let span = current_cx.span();
                     span.set_status(status.take().unwrap());
                 }
             });
@@ -359,14 +375,21 @@ impl OpenTelemetrySpanExt for tracing::Span {
                 let Some(event) = event.take() else {
                     return;
                 };
-                if let Some(builder) = data.builder.as_mut() {
-                    builder
-                        .events
-                        .get_or_insert_with(|| Vec::with_capacity(1))
-                        .push(event);
-                } else {
-                    let span = data.parent_cx.span();
-                    span.add_event_with_timestamp(event.name, event.timestamp, event.attributes);
+                match &mut data.state {
+                    OtelDataState::Builder { builder, .. } => {
+                        builder
+                            .events
+                            .get_or_insert_with(|| Vec::with_capacity(1))
+                            .push(event);
+                    }
+                    OtelDataState::Context { current_cx } => {
+                        let span = current_cx.span();
+                        span.add_event_with_timestamp(
+                            event.name,
+                            event.timestamp,
+                            event.attributes,
+                        );
+                    }
                 }
             });
         });

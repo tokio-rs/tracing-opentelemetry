@@ -1,6 +1,6 @@
 #[cfg(feature = "activate_context")]
 use crate::stack::IdValueStack;
-use crate::OtelData;
+use crate::{OtelData, OtelDataState};
 #[cfg(feature = "activate_context")]
 use opentelemetry::ContextGuard;
 use opentelemetry::{
@@ -9,12 +9,12 @@ use opentelemetry::{
 };
 #[cfg(feature = "activate_context")]
 use std::cell::RefCell;
-use std::marker;
 use std::thread;
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "wasi"))))]
 use std::time::Instant;
 use std::{any::TypeId, borrow::Cow};
 use std::{fmt, vec};
+use std::{marker, mem::take};
 use tracing_core::span::{self, Attributes, Id, Record};
 use tracing_core::{field, Event, Subscriber};
 #[cfg(feature = "tracing-log")]
@@ -165,16 +165,7 @@ struct SpanBuilderUpdates {
 }
 
 impl SpanBuilderUpdates {
-    fn update(self, span_builder: &mut Option<SpanBuilder>) -> Option<Self> {
-        if let Some(builder) = span_builder.as_mut() {
-            self.apply(builder);
-            None
-        } else {
-            Some(self)
-        }
-    }
-
-    fn apply(self, span_builder: &mut SpanBuilder) {
+    fn update(self, span_builder: &mut SpanBuilder) {
         let Self {
             name,
             span_kind,
@@ -970,15 +961,26 @@ where
     /// the context in the process.
     ///
     fn start_cx(&self, otel_data: &mut OtelData) {
-        if let Some(builder) = otel_data.builder.take() {
-            let span = builder.start_with_context(&self.tracer, &otel_data.parent_cx);
-            otel_data.parent_cx = otel_data.parent_cx.with_span(span);
+        if let OtelDataState::Context { .. } = &otel_data.state {
+            // If the context is already started, we do nothing.
+        } else {
+            match take(&mut otel_data.state) {
+                OtelDataState::Builder { builder, parent_cx } => {
+                    let span = builder.start_with_context(&self.tracer, &parent_cx);
+                    let current_cx = parent_cx.with_span(span);
+                    otel_data.state = OtelDataState::Context { current_cx };
+                }
+                _ => (), // This should never happen.
+            }
         }
     }
 
     fn with_started_cx<U>(&self, otel_data: &mut OtelData, f: &dyn Fn(&OtelContext) -> U) -> U {
         self.start_cx(otel_data);
-        f(&otel_data.parent_cx)
+        match &otel_data.state {
+            OtelDataState::Context { current_cx, .. } => f(current_cx),
+            _ => panic!("OtelDataState should be a Context after starting it; this is a bug!"),
+        }
     }
 }
 
@@ -1071,12 +1073,10 @@ where
             sem_conv_config: self.sem_conv_config,
         });
 
-        let mut builder = Some(builder);
         updates.update(&mut builder);
         extensions.insert(OtelData {
-            builder,
-            parent_cx,
-            ..Default::default()
+            state: OtelDataState::Builder { builder, parent_cx },
+            end_time: None,
         });
     }
 
@@ -1096,6 +1096,10 @@ where
                     let guard = cx.clone().attach();
                     GUARD_STACK.with(|stack| stack.borrow_mut().push(id.clone(), guard));
                 });
+            }
+
+            if !self.tracked_inactivity {
+                return;
             }
         }
 
@@ -1145,8 +1149,15 @@ where
         });
         let mut extensions = span.extensions_mut();
         if let Some(otel_data) = extensions.get_mut::<OtelData>() {
-            if let Some(updates) = updates.update(&mut otel_data.builder) {
-                updates.update_span(&otel_data.parent_cx.span());
+            match &mut otel_data.state {
+                OtelDataState::Builder { builder, .. } => {
+                    // If the builder is present, then update it.
+                    updates.update(builder);
+                }
+                OtelDataState::Context { current_cx, .. } => {
+                    // If the Context has been created, then update the span.
+                    updates.update_span(&current_cx.span());
+                }
             }
         }
     }
@@ -1168,14 +1179,17 @@ where
                 .expect("Missing otel data span extensions");
             let follows_context =
                 self.with_started_cx(follows_data, &|cx| cx.span().span_context().clone());
-            if let Some(builder) = data.builder.as_mut() {
-                if let Some(ref mut links) = builder.links {
-                    links.push(otel::Link::with_context(follows_context));
-                } else {
-                    builder.links = Some(vec![otel::Link::with_context(follows_context)]);
+            match &mut data.state {
+                OtelDataState::Builder { builder, .. } => {
+                    if let Some(ref mut links) = builder.links {
+                        links.push(otel::Link::with_context(follows_context));
+                    } else {
+                        builder.links = Some(vec![otel::Link::with_context(follows_context)]);
+                    }
                 }
-            } else {
-                data.parent_cx.span().add_link(follows_context, vec![]);
+                OtelDataState::Context { current_cx, .. } => {
+                    current_cx.span().add_link(follows_context, vec![]);
+                }
             }
         }
     }
@@ -1280,33 +1294,36 @@ where
                     }
                 }
 
-                if let Some(builder) = otel_data.builder.as_mut() {
-                    if builder.status == otel::Status::Unset
-                        && *meta.level() == tracing_core::Level::ERROR
-                    {
-                        builder.status = otel::Status::error("");
+                match &mut otel_data.state {
+                    OtelDataState::Builder { builder, .. } => {
+                        if builder.status == otel::Status::Unset
+                            && *meta.level() == tracing_core::Level::ERROR
+                        {
+                            builder.status = otel::Status::error("");
+                        }
+                        if let Some(builder_updates) = builder_updates {
+                            builder_updates.update(builder);
+                        }
+                        if let Some(ref mut events) = builder.events {
+                            events.push(otel_event);
+                        } else {
+                            builder.events = Some(vec![otel_event]);
+                        }
                     }
-                    if let Some(builder_updates) = builder_updates {
-                        builder_updates.apply(builder);
+                    OtelDataState::Context { current_cx, .. } => {
+                        let span = current_cx.span();
+                        // TODO:ban fix this with accessor in SpanRef that can check the span status
+                        if *meta.level() == tracing_core::Level::ERROR {
+                            span.set_status(otel::Status::error(""));
+                        }
+                        if let Some(builder_updates) = builder_updates {
+                            builder_updates.update_span(&span);
+                        }
+                        span.add_event(otel_event.name, otel_event.attributes);
                     }
-                    if let Some(ref mut events) = builder.events {
-                        events.push(otel_event);
-                    } else {
-                        builder.events = Some(vec![otel_event]);
-                    }
-                } else {
-                    let span = otel_data.parent_cx.span();
-                    // TODO:ban fix this with accessor in SpanRef that can check the span status
-                    if *meta.level() == tracing_core::Level::ERROR {
-                        span.set_status(otel::Status::error(""));
-                    }
-                    if let Some(builder_updates) = builder_updates {
-                        builder_updates.update_span(&span);
-                    }
-                    span.add_event(otel_event.name, otel_event.attributes);
                 }
-            }
-        };
+            };
+        }
     }
 
     /// Exports an OpenTelemetry [`Span`] on close.
@@ -1325,12 +1342,7 @@ where
             (extensions.remove::<OtelData>(), timings)
         };
 
-        if let Some(OtelData {
-            builder,
-            parent_cx,
-            end_time,
-        }) = otel_data
-        {
+        if let Some(OtelData { state, end_time }) = otel_data {
             // Append busy/idle timings when enabled.
             let timings = timings.map(|timings| {
                 let busy_ns = Key::new("busy_ns");
@@ -1342,24 +1354,28 @@ where
                 ]
             });
 
-            if let Some(builder) = builder {
-                // Don't create the context here just to get a SpanRef since it's costly
-                let mut span = builder.start_with_context(&self.tracer, &parent_cx);
-                if let Some(timings) = timings {
-                    span.set_attributes(timings)
-                };
-                if let Some(end_time) = end_time {
-                    span.end_with_timestamp(end_time);
-                } else {
-                    span.end();
+            match state {
+                OtelDataState::Builder { builder, parent_cx } => {
+                    // Don't create the context here just to get a SpanRef since it's costly
+                    let mut span = builder.start_with_context(&self.tracer, &parent_cx);
+                    if let Some(timings) = timings {
+                        span.set_attributes(timings)
+                    };
+                    if let Some(end_time) = end_time {
+                        span.end_with_timestamp(end_time);
+                    } else {
+                        span.end();
+                    }
                 }
-            } else {
-                let span = parent_cx.span();
-                if let Some(timings) = timings {
-                    span.set_attributes(timings)
-                };
-                end_time.map_or_else(|| span.end(), |end_time| span.end_with_timestamp(end_time));
-            };
+                OtelDataState::Context { current_cx } => {
+                    let span = current_cx.span();
+                    if let Some(timings) = timings {
+                        span.set_attributes(timings)
+                    };
+                    end_time
+                        .map_or_else(|| span.end(), |end_time| span.end_with_timestamp(end_time));
+                }
+            }
         }
     }
 
