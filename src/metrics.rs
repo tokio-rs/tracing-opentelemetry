@@ -283,6 +283,7 @@ impl Visit for MetricVisitor<'_> {
 ///   only ever increase
 /// - `counter.`: Used when the counter can go up or down
 /// - `histogram.`: Used to report arbitrary values that are likely to be statistically meaningful
+/// - `gauge.`: Used to report instantaneous values that can go up or down
 ///
 /// Examples:
 /// ```
