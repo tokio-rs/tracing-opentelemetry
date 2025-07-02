@@ -297,6 +297,9 @@ impl Visit for MetricVisitor<'_> {
 /// info!(histogram.qux = 1);
 /// info!(histogram.abc = -1);
 /// info!(histogram.def = 1.1);
+///
+/// info!(gauge.foo = 1);
+/// info!(gauge.bar = 1.1);
 /// ```
 ///
 /// # Mixing data types
@@ -408,11 +411,8 @@ impl MetricsFilter {
                 if name.starts_with(METRIC_PREFIX_COUNTER)
                     || name.starts_with(METRIC_PREFIX_MONOTONIC_COUNTER)
                     || name.starts_with(METRIC_PREFIX_HISTOGRAM)
+                    || name.starts_with(METRIC_PREFIX_GAUGE)
                 {
-                    return true;
-                }
-
-                if name.starts_with(METRIC_PREFIX_GAUGE) {
                     return true;
                 }
 
