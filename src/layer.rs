@@ -1,13 +1,10 @@
-#[cfg(feature = "activate_context")]
 use crate::stack::IdValueStack;
 use crate::{OtelData, OtelDataState};
-#[cfg(feature = "activate_context")]
 use opentelemetry::ContextGuard;
 use opentelemetry::{
     trace::{self as otel, noop, Span, SpanBuilder, SpanKind, Status, TraceContextExt},
     Context as OtelContext, Key, KeyValue, StringValue, Value,
 };
-#[cfg(feature = "activate_context")]
 use std::cell::RefCell;
 use std::thread;
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "wasi"))))]
@@ -46,6 +43,7 @@ pub struct OpenTelemetryLayer<S, T> {
     with_threads: bool,
     with_level: bool,
     with_target: bool,
+    context_activation: bool,
     sem_conv_config: SemConvConfig,
     with_context: WithContext,
     _registry: marker::PhantomData<S>,
@@ -617,6 +615,7 @@ where
             with_threads: true,
             with_level: false,
             with_target: true,
+            context_activation: true,
             sem_conv_config: SemConvConfig {
                 error_fields_to_exceptions: true,
                 error_records_to_exceptions: true,
@@ -676,6 +675,7 @@ where
             with_threads: self.with_threads,
             with_level: self.with_level,
             with_target: self.with_target,
+            context_activation: self.context_activation,
             sem_conv_config: self.sem_conv_config,
             with_context: WithContext {
                 with_context: OpenTelemetryLayer::<S, Tracer>::get_context,
@@ -833,6 +833,20 @@ where
         }
     }
 
+    /// Sets whether or not an OpenTelemetry Context should be activated on span entry.
+    ///
+    /// When enabled, entering a span will activate its OpenTelemetry context, making it
+    /// available to other OpenTelemetry instrumentation. This allows for proper context
+    /// propagation across different instrumentation libraries.
+    ///
+    /// By default, context activation is enabled.
+    pub fn with_context_activation(self, context_activation: bool) -> Self {
+        Self {
+            context_activation,
+            ..self
+        }
+    }
+
     /// Retrieve the parent OpenTelemetry [`Context`] from the current tracing
     /// [`span`] through the [`Registry`]. This [`Context`] links spans to their
     /// parent for proper hierarchical visualization.
@@ -865,16 +879,13 @@ where
         }
 
         if attrs.is_contextual() {
-            #[cfg(feature = "activate_context")]
-            // If the span is contextual and we are using the activate_context feature,
-            // we should use the current OTel context
-            {
+            if self.context_activation {
+                // If the span is contextual and we are using context activation,
+                // we should use the current OTel context
                 OtelContext::current()
-            }
-            #[cfg(not(feature = "activate_context"))]
-            // If the span is contextual and we are not using the activate_context feature,
-            // we should use the current tracing context
-            {
+            } else {
+                // If the span is contextual and we are not using context activation,
+                // we should use the current tracing context
                 ctx.lookup_current()
                     .and_then(|span| {
                         let mut extensions = span.extensions_mut();
@@ -997,12 +1008,10 @@ thread_local! {
     };
 }
 
-#[cfg(feature = "activate_context")]
 thread_local! {
     static GUARD_STACK: RefCell<IdContextGuardStack> = RefCell::new(IdContextGuardStack::new());
 }
 
-#[cfg(feature = "activate_context")]
 type IdContextGuardStack = IdValueStack<ContextGuard>;
 
 impl<S, T> Layer<S> for OpenTelemetryLayer<S, T>
@@ -1081,16 +1090,14 @@ where
     }
 
     fn on_enter(&self, id: &span::Id, ctx: Context<'_, S>) {
-        #[cfg(not(feature = "activate_context"))]
-        if !self.tracked_inactivity {
+        if !self.context_activation && !self.tracked_inactivity {
             return;
         }
 
         let span = ctx.span(id).expect("Span not found, this is a bug");
         let mut extensions = span.extensions_mut();
 
-        #[cfg(feature = "activate_context")]
-        {
+        if self.context_activation {
             if let Some(otel_data) = extensions.get_mut::<OtelData>() {
                 self.with_started_cx(otel_data, &|cx| {
                     let guard = cx.clone().attach();
@@ -1119,8 +1126,9 @@ where
 
         if let Some(otel_data) = extensions.get_mut::<OtelData>() {
             otel_data.end_time = Some(crate::time::now());
-            #[cfg(feature = "activate_context")]
-            GUARD_STACK.with(|stack| stack.borrow_mut().pop(id));
+            if self.context_activation {
+                GUARD_STACK.with(|stack| stack.borrow_mut().pop(id));
+            }
         }
 
         if !self.tracked_inactivity {
@@ -1590,9 +1598,22 @@ mod tests {
     }
 
     #[test]
-    fn trace_id_from_existing_context() {
+    fn trace_id_from_existing_context_with_context_activation() {
+        trace_id_from_existing_context_impl(true);
+    }
+
+    #[test]
+    fn trace_id_from_existing_context_no_context_activation() {
+        trace_id_from_existing_context_impl(false);
+    }
+
+    fn trace_id_from_existing_context_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_context_activation(context_activation),
+        );
         let trace_id = otel::TraceId::from(42u128);
         let existing_cx = OtelContext::current_with_span(TestSpan(otel::SpanContext::new(
             trace_id,
@@ -1612,12 +1633,22 @@ mod tests {
     }
 
     #[test]
-    fn includes_timings() {
+    fn includes_timings_with_context_activation() {
+        includes_timings_impl(true);
+    }
+
+    #[test]
+    fn includes_timings_no_context_activation() {
+        includes_timings_impl(false);
+    }
+
+    fn includes_timings_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(
             layer()
                 .with_tracer(tracer.clone())
-                .with_tracked_inactivity(true),
+                .with_tracked_inactivity(true)
+                .with_context_activation(context_activation),
         );
 
         tracing::subscriber::with_default(subscriber, || {
@@ -1631,9 +1662,22 @@ mod tests {
     }
 
     #[test]
-    fn records_error_fields() {
+    fn records_error_fields_with_context_activation() {
+        records_error_fields_impl(true);
+    }
+
+    #[test]
+    fn records_error_fields_no_context_activation() {
+        records_error_fields_impl(false);
+    }
+
+    fn records_error_fields_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_context_activation(context_activation),
+        );
 
         let err = TestDynError::new("base error")
             .with_parent("intermediate error")
@@ -1674,9 +1718,22 @@ mod tests {
     }
 
     #[test]
-    fn records_event_name() {
+    fn records_event_name_with_context_activation() {
+        records_event_name_impl(true);
+    }
+
+    #[test]
+    fn records_event_name_no_context_activation() {
+        records_event_name_impl(false);
+    }
+
+    fn records_event_name_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_context_activation(context_activation),
+        );
 
         tracing::subscriber::with_default(subscriber, || {
             tracing::debug_span!("test span").in_scope(|| {
@@ -1700,12 +1757,22 @@ mod tests {
     }
 
     #[test]
-    fn records_no_error_fields() {
+    fn records_no_error_fields_with_context_activation() {
+        records_no_error_fields_impl(true);
+    }
+
+    #[test]
+    fn records_no_error_fields_no_context_activation() {
+        records_no_error_fields_impl(false);
+    }
+
+    fn records_no_error_fields_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(
             layer()
                 .with_error_records_to_exceptions(false)
-                .with_tracer(tracer.clone()),
+                .with_tracer(tracer.clone())
+                .with_context_activation(context_activation),
         );
 
         let err = TestDynError::new("base error")
@@ -1747,10 +1814,23 @@ mod tests {
     }
 
     #[test]
-    fn includes_span_location() {
+    fn includes_span_location_with_context_activation() {
+        includes_span_location_impl(true);
+    }
+
+    #[test]
+    fn includes_span_location_no_context_activation() {
+        includes_span_location_impl(false);
+    }
+
+    fn includes_span_location_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry()
-            .with(layer().with_tracer(tracer.clone()).with_location(true));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_location(true)
+                .with_context_activation(context_activation),
+        );
 
         tracing::subscriber::with_default(subscriber, || {
             tracing::debug_span!("request");
@@ -1764,10 +1844,23 @@ mod tests {
     }
 
     #[test]
-    fn excludes_span_location() {
+    fn excludes_span_location_with_context_activation() {
+        excludes_span_location_impl(true);
+    }
+
+    #[test]
+    fn excludes_span_location_no_context_activation() {
+        excludes_span_location_impl(false);
+    }
+
+    fn excludes_span_location_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry()
-            .with(layer().with_tracer(tracer.clone()).with_location(false));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_location(false)
+                .with_context_activation(context_activation),
+        );
 
         tracing::subscriber::with_default(subscriber, || {
             tracing::debug_span!("request");
@@ -1781,7 +1874,16 @@ mod tests {
     }
 
     #[test]
-    fn includes_thread() {
+    fn includes_thread_with_context_activation() {
+        includes_thread_impl(true);
+    }
+
+    #[test]
+    fn includes_thread_no_context_activation() {
+        includes_thread_impl(false);
+    }
+
+    fn includes_thread_impl(context_activation: bool) {
         let thread = thread::current();
         let expected_name = thread
             .name()
@@ -1789,8 +1891,12 @@ mod tests {
         let expected_id = Value::I64(thread_id_integer(thread.id()) as i64);
 
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry()
-            .with(layer().with_tracer(tracer.clone()).with_threads(true));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_threads(true)
+                .with_context_activation(context_activation),
+        );
 
         tracing::subscriber::with_default(subscriber, || {
             tracing::debug_span!("request");
@@ -1803,10 +1909,23 @@ mod tests {
     }
 
     #[test]
-    fn excludes_thread() {
+    fn excludes_thread_with_context_activation() {
+        excludes_thread_impl(true);
+    }
+
+    #[test]
+    fn excludes_thread_no_context_activation() {
+        excludes_thread_impl(false);
+    }
+
+    fn excludes_thread_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry()
-            .with(layer().with_tracer(tracer.clone()).with_threads(false));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_threads(false)
+                .with_context_activation(context_activation),
+        );
 
         tracing::subscriber::with_default(subscriber, || {
             tracing::debug_span!("request");
@@ -1819,10 +1938,23 @@ mod tests {
     }
 
     #[test]
-    fn includes_level() {
+    fn includes_level_with_context_activation() {
+        includes_level_impl(true);
+    }
+
+    #[test]
+    fn includes_level_no_context_activation() {
+        includes_level_impl(false);
+    }
+
+    fn includes_level_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry()
-            .with(layer().with_tracer(tracer.clone()).with_level(true));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_level(true)
+                .with_context_activation(context_activation),
+        );
 
         tracing::subscriber::with_default(subscriber, || {
             tracing::debug_span!("request");
@@ -1834,10 +1966,23 @@ mod tests {
     }
 
     #[test]
-    fn excludes_level() {
+    fn excludes_level_with_context_activation() {
+        excludes_level_impl(true);
+    }
+
+    #[test]
+    fn excludes_level_no_context_activation() {
+        excludes_level_impl(false);
+    }
+
+    fn excludes_level_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry()
-            .with(layer().with_tracer(tracer.clone()).with_level(false));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_level(false)
+                .with_context_activation(context_activation),
+        );
 
         tracing::subscriber::with_default(subscriber, || {
             tracing::debug_span!("request");
@@ -1885,9 +2030,22 @@ mod tests {
     }
 
     #[test]
-    fn propagates_error_fields_from_event_to_span() {
+    fn propagates_error_fields_from_event_to_span_with_context_activation() {
+        propagates_error_fields_from_event_to_span_impl(true);
+    }
+
+    #[test]
+    fn propagates_error_fields_from_event_to_span_no_context_activation() {
+        propagates_error_fields_from_event_to_span_impl(false);
+    }
+
+    fn propagates_error_fields_from_event_to_span_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_context_activation(context_activation),
+        );
 
         let err = TestDynError::new("base error")
             .with_parent("intermediate error")
@@ -1918,12 +2076,22 @@ mod tests {
     }
 
     #[test]
-    fn propagates_no_error_fields_from_event_to_span() {
+    fn propagates_no_error_fields_from_event_to_span_with_context_activation() {
+        propagates_no_error_fields_from_event_to_span_impl(true);
+    }
+
+    #[test]
+    fn propagates_no_error_fields_from_event_to_span_no_context_activation() {
+        propagates_no_error_fields_from_event_to_span_impl(false);
+    }
+
+    fn propagates_no_error_fields_from_event_to_span_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(
             layer()
                 .with_error_fields_to_exceptions(false)
-                .with_tracer(tracer.clone()),
+                .with_tracer(tracer.clone())
+                .with_context_activation(context_activation),
         );
 
         let err = TestDynError::new("base error")
@@ -1955,13 +2123,23 @@ mod tests {
     }
 
     #[test]
-    fn tracing_error_compatibility() {
+    fn tracing_error_compatibility_with_context_activation() {
+        tracing_error_compatibility_impl(true);
+    }
+
+    #[test]
+    fn tracing_error_compatibility_no_context_activation() {
+        tracing_error_compatibility_impl(false);
+    }
+
+    fn tracing_error_compatibility_impl(context_activation: bool) {
         let tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry()
             .with(
                 layer()
                     .with_error_fields_to_exceptions(false)
-                    .with_tracer(tracer.clone()),
+                    .with_tracer(tracer.clone())
+                    .with_context_activation(context_activation),
             )
             .with(tracing_error::ErrorLayer::default());
 
@@ -1979,14 +2157,11 @@ mod tests {
         // No need to assert anything, as long as this finished (and did not panic), everything is ok.
     }
 
-    #[cfg(feature = "activate_context")]
     #[derive(Debug, PartialEq)]
     struct ValueA(&'static str);
-    #[cfg(feature = "activate_context")]
     #[derive(Debug, PartialEq)]
     struct ValueB(&'static str);
 
-    #[cfg(feature = "activate_context")]
     #[test]
     fn otel_context_propagation() {
         use opentelemetry::trace::Tracer;
@@ -2099,9 +2274,22 @@ mod tests {
     }
 
     #[test]
-    fn record_after() {
+    fn record_after_with_context_activation() {
+        record_after_impl(true);
+    }
+
+    #[test]
+    fn record_after_no_context_activation() {
+        record_after_impl(false);
+    }
+
+    fn record_after_impl(context_activation: bool) {
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_context_activation(context_activation),
+        );
 
         tracing::subscriber::with_default(subscriber, || {
             let root = trace_span!("root", before = "before", after = "before");
@@ -2168,10 +2356,23 @@ mod tests {
     }
 
     #[test]
-    fn follows_from_adds_link() {
+    fn follows_from_adds_link_with_context_activation() {
+        follows_from_adds_link_impl(true);
+    }
+
+    #[test]
+    fn follows_from_adds_link_no_context_activation() {
+        follows_from_adds_link_impl(false);
+    }
+
+    fn follows_from_adds_link_impl(context_activation: bool) {
         use crate::OpenTelemetrySpanExt;
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_context_activation(context_activation),
+        );
 
         let span1_id = tracing::subscriber::with_default(subscriber, || {
             let span2 = tracing::debug_span!("span2");
@@ -2220,10 +2421,23 @@ mod tests {
     }
 
     #[test]
-    fn follows_from_multiple_links() {
+    fn follows_from_multiple_links_with_context_activation() {
+        follows_from_multiple_links_impl(true);
+    }
+
+    #[test]
+    fn follows_from_multiple_links_no_context_activation() {
+        follows_from_multiple_links_impl(false);
+    }
+
+    fn follows_from_multiple_links_impl(context_activation: bool) {
         use crate::OpenTelemetrySpanExt;
         let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_context_activation(context_activation),
+        );
 
         let (span1_id, span2_id) = tracing::subscriber::with_default(subscriber, || {
             let span3 = tracing::debug_span!("span3");
@@ -2273,5 +2487,64 @@ mod tests {
             links[0] == span1_id && links[1] == span2_id,
             "Links should point to the correct source spans"
         );
+    }
+
+    #[test]
+    fn context_activation_disabled() {
+        use tracing::span;
+
+        let mut tracer = TestTracer::default();
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_context_activation(false),
+        );
+
+        tracing::subscriber::with_default(subscriber, || {
+            // Add a value to the current OpenTelemetry context
+            let _outer_guard =
+                OtelContext::attach(OtelContext::default().with_value(ValueA("outer")));
+            assert_eq!(OtelContext::current().get(), Some(&ValueA("outer")));
+
+            let root = span!(tracing::Level::TRACE, "tokio-tracing-span-parent");
+
+            // Drop the guard to ensure the context is cleared
+            drop(_outer_guard);
+            assert!(OtelContext::current().get::<ValueA>().is_none());
+
+            // Enter the root span - with context activation disabled,
+            // the context should NOT be propagated
+            let _enter_root = root.enter();
+            assert!(OtelContext::current().get::<ValueA>().is_none());
+
+            // Add another value to the current OpenTelemetry context
+            let _inner_guard =
+                OtelContext::attach(OtelContext::current_with_value(ValueB("inner")));
+            assert!(OtelContext::current().get::<ValueA>().is_none());
+            assert_eq!(OtelContext::current().get(), Some(&ValueB("inner")));
+
+            let child = span!(tracing::Level::TRACE, "tokio-tracing-span-child");
+
+            // Drop the guard to ensure the context is reverted
+            drop(_inner_guard);
+            assert!(OtelContext::current().get::<ValueA>().is_none());
+            assert!(OtelContext::current().get::<ValueB>().is_none());
+
+            // Enter the child span - with context activation disabled,
+            // the context should NOT be propagated
+            let _enter_child = child.enter();
+            assert!(OtelContext::current().get::<ValueA>().is_none());
+            assert!(OtelContext::current().get::<ValueB>().is_none());
+        });
+
+        // Verify spans were still created and exported
+        let spans = tracer.spans();
+        assert_eq!(spans.len(), 2);
+        assert!(spans
+            .iter()
+            .any(|span| span.name == "tokio-tracing-span-parent"));
+        assert!(spans
+            .iter()
+            .any(|span| span.name == "tokio-tracing-span-child"));
     }
 }

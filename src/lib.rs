@@ -118,7 +118,6 @@ mod layer;
 /// Span extension which enables OpenTelemetry context management.
 mod span_ext;
 
-#[cfg(feature = "activate_context")]
 mod stack;
 
 use std::time::SystemTime;

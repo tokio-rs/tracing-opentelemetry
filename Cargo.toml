@@ -16,11 +16,9 @@ edition = "2021"
 rust-version = "1.75.0"
 
 [features]
-default = ["tracing-log", "metrics", "activate_context"]
+default = ["tracing-log", "metrics"]
 # Enables support for exporting OpenTelemetry metrics
 metrics = ["opentelemetry/metrics","opentelemetry_sdk/metrics", "smallvec"]
-# Enables support for activating an OpenTelemetry Context on Span entry
-activate_context = []
 
 [dependencies]
 opentelemetry = { version = "0.30.0", default-features = false, features = ["trace"] }
