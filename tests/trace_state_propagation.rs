@@ -37,7 +37,7 @@ fn trace_with_assigned_otel_context() {
 
     tracing::subscriber::with_default(subscriber, || {
         let child = tracing::debug_span!("child");
-        child.set_parent(cx);
+        let _ = child.set_parent(cx);
     });
 
     drop(provider); // flush all spans
@@ -70,7 +70,7 @@ fn propagate_invalid_context() {
 
     tracing::subscriber::with_default(subscriber, || {
         let root = tracing::debug_span!("root");
-        root.set_parent(invalid_cx);
+        let _ = root.set_parent(invalid_cx);
         root.in_scope(|| tracing::debug_span!("child"));
     });
 
@@ -90,7 +90,7 @@ fn inject_context_into_outgoing_requests() {
 
     tracing::subscriber::with_default(subscriber, || {
         let root = tracing::debug_span!("root");
-        root.set_parent(cx);
+        let _ = root.set_parent(cx);
         let _g = root.enter();
         let child = tracing::debug_span!("child");
         propagator.inject_context(&child.context(), &mut outgoing_req_carrier);
@@ -125,7 +125,7 @@ fn sampling_decision_respects_new_parent() {
         // Observation: if you force the _child_ to materialize before the parent, e.g.,
         // if you swap these two lines - bad things will happen, and we shouldn't support
         // this.
-        child.set_parent(Context::current_with_span(root_span));
+        let _ = child.set_parent(Context::current_with_span(root_span));
         child.context(); // force a sampling decision
     });
 

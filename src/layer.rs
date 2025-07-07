@@ -2254,13 +2254,13 @@ mod tests {
 
             let child1 = trace_span!("child-1");
             let root_context = root.context(); // SpanData (None)
-            child1.set_parent(root_context); // Clone context, but SpanData(None)
+            let _ = child1.set_parent(root_context); // Clone context, but SpanData(None)
 
             let _enter_root = root.enter();
             drop(_enter_root);
 
             let child2 = trace_span!("child-2");
-            child2.set_parent(root.context());
+            let _ = child2.set_parent(root.context());
         });
 
         // Let's check the spans
@@ -2333,10 +2333,10 @@ mod tests {
             _ = root.enter();
 
             let child1 = trace_span!("child-1");
-            child1.set_parent(root.context());
+            let _ = child1.set_parent(root.context());
 
             trace_span!(parent: &child1, "child-2");
-            child1.set_parent(root.context()); // <-- this is what causes the issue
+            let _ = child1.set_parent(root.context()); // <-- this is what causes the issue
 
             trace_span!(parent: &child1, "child-3");
         });

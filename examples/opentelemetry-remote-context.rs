@@ -37,7 +37,7 @@ fn main() {
         let app_root = span!(tracing::Level::INFO, "app_start");
 
         // Assign parent trace from external context
-        app_root.set_parent(parent_context);
+        let _ = app_root.set_parent(parent_context);
 
         // To include tracing context in client requests from _this_ app,
         // use `context` to extract the current OpenTelemetry context.

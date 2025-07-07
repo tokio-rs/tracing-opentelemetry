@@ -17,6 +17,10 @@ pub trait OpenTelemetrySpanExt {
     /// Associates `self` with a given OpenTelemetry trace, using the provided
     /// parent [`Context`].
     ///
+    /// This method provides error handling for cases where the span context
+    /// cannot be set, such as when the OpenTelemetry layer is not present
+    /// or when the span has already been started.
+    ///
     /// [`Context`]: opentelemetry::Context
     ///
     /// # Examples
@@ -41,12 +45,12 @@ pub trait OpenTelemetrySpanExt {
     /// let app_root = tracing::span!(tracing::Level::INFO, "app_start");
     ///
     /// // Assign parent trace from external context
-    /// app_root.set_parent(parent_context.clone());
+    /// let _ = app_root.set_parent(parent_context.clone());
     ///
     /// // Or if the current span has been created elsewhere:
-    /// Span::current().set_parent(parent_context);
+    /// let _ = Span::current().set_parent(parent_context);
     /// ```
-    fn set_parent(&self, cx: Context);
+    fn set_parent(&self, cx: Context) -> Result<(), &'static str>;
 
     /// Associates `self` with a given OpenTelemetry trace, using the provided
     /// followed span [`SpanContext`].
@@ -224,10 +228,14 @@ impl OpenTelemetrySpanExt for tracing::Span {
     /// Additionally, once a span has been fully built - and the SpanBuilder has been consumed -
     /// the parent _cannot_ be mutated.
     ///
-    fn set_parent(&self, cx: Context) {
+    fn set_parent(&self, cx: Context) -> Result<(), &'static str> {
         let mut cx = Some(cx);
+        let mut result = Ok(());
+        let result_ref = &mut result;
+
         self.with_subscriber(move |(id, subscriber)| {
             let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
+                *result_ref = Err("OpenTelemetry layer not found");
                 return;
             };
             // Set the parent OTel for the current span
@@ -245,10 +253,14 @@ impl OpenTelemetrySpanExt for tracing::Span {
                         // new parent context when it's eventually built
                         *parent_cx = new_cx;
                     }
-                    OtelDataState::Context { .. } => (),
+                    OtelDataState::Context { .. } => {
+                        *result_ref = Err("Span has already been started, cannot set parent");
+                    }
                 }
             });
         });
+
+        result
     }
 
     fn add_link(&self, cx: SpanContext) {
