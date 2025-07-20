@@ -39,6 +39,7 @@ pub struct OpenTelemetryLayer<S, T> {
     tracked_inactivity: bool,
     with_threads: bool,
     with_level: bool,
+    with_target: bool,
     sem_conv_config: SemConvConfig,
     get_context: WithContext,
     _registry: marker::PhantomData<S>,
@@ -563,6 +564,7 @@ where
             tracked_inactivity: true,
             with_threads: true,
             with_level: false,
+            with_target: true,
             sem_conv_config: SemConvConfig {
                 error_fields_to_exceptions: true,
                 error_records_to_exceptions: true,
@@ -618,6 +620,7 @@ where
             tracked_inactivity: self.tracked_inactivity,
             with_threads: self.with_threads,
             with_level: self.with_level,
+            with_target: self.with_target,
             sem_conv_config: self.sem_conv_config,
             get_context: WithContext(OpenTelemetryLayer::<S, Tracer>::get_context),
             _registry: self._registry,
@@ -762,6 +765,16 @@ where
         }
     }
 
+    /// Sets whether or not span metadata should include an attribute with `target` from `tracing` spans.
+    ///
+    /// By default, the target attribute is enabled..
+    pub fn with_target(self, target: bool) -> Self {
+        Self {
+            with_target: target,
+            ..self
+        }
+    }
+
     /// Retrieve the parent OpenTelemetry [`Context`] from the current tracing
     /// [`span`] through the [`Registry`]. This [`Context`] links spans to their
     /// parent for proper hierarchical visualization.
@@ -838,6 +851,9 @@ where
             extra_attrs += 2;
         }
         if self.with_level {
+            extra_attrs += 1;
+        }
+        if self.with_target {
             extra_attrs += 1;
         }
         extra_attrs
@@ -920,6 +936,9 @@ where
 
         if self.with_level {
             builder_attrs.push(KeyValue::new("level", attrs.metadata().level().as_str()));
+        }
+        if self.with_target {
+            builder_attrs.push(KeyValue::new("target", attrs.metadata().target()));
         }
 
         let mut updates = SpanBuilderUpdates::default();
@@ -1721,6 +1740,42 @@ mod tests {
             .map(|kv| kv.key.as_str())
             .collect::<Vec<&str>>();
         assert!(!keys.contains(&"level"));
+    }
+
+    #[test]
+    fn includes_target() {
+        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let subscriber = tracing_subscriber::registry()
+            .with(layer().with_tracer(tracer.clone()).with_target(true));
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug_span!("request");
+        });
+
+        let attributes = tracer.with_data(|data| data.builder.attributes.as_ref().unwrap().clone());
+        let keys = attributes
+            .iter()
+            .map(|kv| kv.key.as_str())
+            .collect::<Vec<&str>>();
+        assert!(keys.contains(&"target"));
+    }
+
+    #[test]
+    fn excludes_target() {
+        let tracer = TestTracer(Arc::new(Mutex::new(None)));
+        let subscriber = tracing_subscriber::registry()
+            .with(layer().with_tracer(tracer.clone()).with_target(false));
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug_span!("request");
+        });
+
+        let attributes = tracer.with_data(|data| data.builder.attributes.as_ref().unwrap().clone());
+        let keys = attributes
+            .iter()
+            .map(|kv| kv.key.as_str())
+            .collect::<Vec<&str>>();
+        assert!(!keys.contains(&"target"));
     }
 
     #[test]
