@@ -165,7 +165,7 @@ impl Display for SpanData {
         }
         writeln!(f, "- Links:")?;
         for link in self.0.links.iter() {
-            writeln!(f, "  - {:?}", link)?;
+            writeln!(f, "  - {link:?}")?;
         }
         Ok(())
     }
