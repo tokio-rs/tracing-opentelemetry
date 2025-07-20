@@ -674,7 +674,7 @@ where
                         }
                     }
                     unexpected => {
-                        panic!("InstrumentKind {:?} not currently supported!", unexpected)
+                        panic!("InstrumentKind {unexpected:?} not currently supported!")
                     }
                 }
             });

@@ -225,18 +225,17 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
                     self.span_builder_updates
                         .get_or_insert_with(SpanBuilderUpdates::default)
                         .status
-                        .replace(otel::Status::error(format!("{:?}", value)));
+                        .replace(otel::Status::error(format!("{value:?}")));
                 }
                 if self.sem_conv_config.error_events_to_exceptions {
                     self.event_builder.name = EVENT_EXCEPTION_NAME.into();
-                    self.event_builder.attributes.push(KeyValue::new(
-                        FIELD_EXCEPTION_MESSAGE,
-                        format!("{:?}", value),
-                    ));
+                    self.event_builder
+                        .attributes
+                        .push(KeyValue::new(FIELD_EXCEPTION_MESSAGE, format!("{value:?}")));
                 } else {
                     self.event_builder
                         .attributes
-                        .push(KeyValue::new("error", format!("{:?}", value)));
+                        .push(KeyValue::new("error", format!("{value:?}")));
                 }
             }
             // Skip fields that are actually log metadata that have already been handled
@@ -256,7 +255,7 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
     /// [`Span`]: opentelemetry::trace::Span
     fn record_debug(&mut self, field: &field::Field, value: &dyn fmt::Debug) {
         match field.name() {
-            "message" => self.event_builder.name = format!("{:?}", value).into(),
+            "message" => self.event_builder.name = format!("{value:?}").into(),
             // While tracing supports the error primitive, the instrumentation macro does not
             // use the primitive and instead uses the debug or display primitive.
             // In both cases, an event with an empty name and with an error attribute is created.
@@ -265,18 +264,17 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
                     self.span_builder_updates
                         .get_or_insert_with(SpanBuilderUpdates::default)
                         .status
-                        .replace(otel::Status::error(format!("{:?}", value)));
+                        .replace(otel::Status::error(format!("{value:?}")));
                 }
                 if self.sem_conv_config.error_events_to_exceptions {
                     self.event_builder.name = EVENT_EXCEPTION_NAME.into();
-                    self.event_builder.attributes.push(KeyValue::new(
-                        FIELD_EXCEPTION_MESSAGE,
-                        format!("{:?}", value),
-                    ));
+                    self.event_builder
+                        .attributes
+                        .push(KeyValue::new(FIELD_EXCEPTION_MESSAGE, format!("{value:?}")));
                 } else {
                     self.event_builder
                         .attributes
-                        .push(KeyValue::new("error", format!("{:?}", value)));
+                        .push(KeyValue::new("error", format!("{value:?}")));
                 }
             }
             // Skip fields that are actually log metadata that have already been handled
@@ -285,7 +283,7 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
             name => {
                 self.event_builder
                     .attributes
-                    .push(KeyValue::new(name, format!("{:?}", value)));
+                    .push(KeyValue::new(name, format!("{value:?}")));
             }
         }
     }
@@ -454,19 +452,19 @@ impl field::Visit for SpanAttributeVisitor<'_> {
     /// [`Span`]: opentelemetry::trace::Span
     fn record_debug(&mut self, field: &field::Field, value: &dyn fmt::Debug) {
         match field.name() {
-            SPAN_NAME_FIELD => self.span_builder_updates.name = Some(format!("{:?}", value).into()),
+            SPAN_NAME_FIELD => self.span_builder_updates.name = Some(format!("{value:?}").into()),
             SPAN_KIND_FIELD => {
-                self.span_builder_updates.span_kind = str_to_span_kind(&format!("{:?}", value))
+                self.span_builder_updates.span_kind = str_to_span_kind(&format!("{value:?}"))
             }
             SPAN_STATUS_CODE_FIELD => {
-                self.span_builder_updates.status = Some(str_to_status(&format!("{:?}", value)))
+                self.span_builder_updates.status = Some(str_to_status(&format!("{value:?}")))
             }
             SPAN_STATUS_DESCRIPTION_FIELD => {
-                self.span_builder_updates.status = Some(otel::Status::error(format!("{:?}", value)))
+                self.span_builder_updates.status = Some(otel::Status::error(format!("{value:?}")))
             }
             _ => self.record(KeyValue::new(
                 Key::new(field.name()),
-                Value::String(format!("{:?}", value).into()),
+                Value::String(format!("{value:?}").into()),
             )),
         }
     }
@@ -1212,7 +1210,7 @@ impl Timings {
 }
 
 fn thread_id_integer(id: thread::ThreadId) -> u64 {
-    let thread_id = format!("{:?}", id);
+    let thread_id = format!("{id:?}");
     thread_id
         .trim_start_matches("ThreadId(")
         .trim_end_matches(')')
