@@ -4,7 +4,7 @@ use opentelemetry_sdk::{
     metrics::{
         data::{self, Gauge, Histogram, Sum},
         reader::MetricReader,
-        InstrumentKind, ManualReader, MeterProviderBuilder, SdkMeterProvider,
+        InstrumentKind, ManualReader, MeterProviderBuilder,
     },
 };
 
@@ -27,9 +27,8 @@ async fn u64_counter_is_exported() {
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(monotonic_counter.hello_world = 1_u64);
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -43,9 +42,8 @@ async fn u64_counter_is_exported_i64_at_instrumentation_point() {
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(monotonic_counter.hello_world2 = 1_i64);
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -59,9 +57,8 @@ async fn f64_counter_is_exported() {
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(monotonic_counter.float_hello_world = 1.000000123_f64);
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -75,9 +72,8 @@ async fn i64_up_down_counter_is_exported() {
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(counter.pebcak = -5_i64);
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -91,9 +87,8 @@ async fn i64_up_down_counter_is_exported_u64_at_instrumentation_point() {
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(counter.pebcak2 = 5_u64);
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -107,9 +102,8 @@ async fn f64_up_down_counter_is_exported() {
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(counter.pebcak_blah = 99.123_f64);
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -120,9 +114,8 @@ async fn u64_gauge_is_exported() {
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(gauge.gygygy = 1_u64);
         tracing::info!(gauge.gygygy = 2_u64);
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -133,9 +126,8 @@ async fn f64_gauge_is_exported() {
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(gauge.huitt = 1_f64);
         tracing::info!(gauge.huitt = 2_f64);
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -146,9 +138,8 @@ async fn i64_gauge_is_exported() {
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(gauge.samsagaz = 1_i64);
         tracing::info!(gauge.samsagaz = 2_i64);
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -162,9 +153,8 @@ async fn u64_histogram_is_exported() {
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(histogram.abcdefg = 9_u64);
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -178,9 +168,8 @@ async fn f64_histogram_is_exported() {
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(histogram.abcdefg_racecar = 777.0012_f64);
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -207,9 +196,8 @@ async fn u64_counter_with_attributes_is_exported() {
             str_key_1 = "foo",
             bool_key_1 = true,
         );
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -236,9 +224,8 @@ async fn f64_counter_with_attributes_is_exported() {
             str_key_1 = "foo",
             bool_key_1 = true,
         );
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -265,9 +252,8 @@ async fn i64_up_down_counter_with_attributes_is_exported() {
             str_key_1 = "foo",
             bool_key_1 = true,
         );
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -294,9 +280,8 @@ async fn f64_up_down_counter_with_attributes_is_exported() {
             str_key_1 = "foo",
             bool_key_1 = true,
         );
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -323,9 +308,8 @@ async fn f64_gauge_with_attributes_is_exported() {
             str_key_1 = "foo",
             bool_key_1 = true,
         );
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -352,9 +336,8 @@ async fn u64_gauge_with_attributes_is_exported() {
             str_key_1 = "foo",
             bool_key_1 = true,
         );
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -381,9 +364,8 @@ async fn i64_gauge_with_attributes_is_exported() {
             str_key_1 = "foo",
             bool_key_1 = true,
         );
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -410,9 +392,8 @@ async fn u64_histogram_with_attributes_is_exported() {
             str_key_1 = "foo",
             bool_key_1 = true,
         );
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -439,9 +420,8 @@ async fn f64_histogram_with_attributes_is_exported() {
             str_key_1 = "foo",
             bool_key_1 = true,
         );
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -468,9 +448,8 @@ async fn display_attribute_is_exported() {
             monotonic_counter.hello_world = 1_u64,
             display_key_1 = %display_attribute,
         );
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 #[tokio::test]
@@ -497,9 +476,8 @@ async fn debug_attribute_is_exported() {
             monotonic_counter.hello_world = 1_u64,
             debug_key_1 = ?debug_attribute,
         );
+        exporter.export().unwrap();
     });
-
-    exporter.export().unwrap();
 }
 
 fn init_subscriber<T>(
@@ -522,7 +500,6 @@ fn init_subscriber<T>(
         expected_value,
         expected_attributes,
         reader,
-        _meter_provider: provider.clone(),
     };
 
     (
@@ -568,7 +545,6 @@ struct TestExporter<T> {
     expected_value: T,
     expected_attributes: Option<Vec<KeyValue>>,
     reader: TestReader,
-    _meter_provider: SdkMeterProvider,
 }
 
 trait AsAny {

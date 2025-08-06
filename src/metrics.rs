@@ -368,18 +368,19 @@ impl Visit for MetricVisitor<'_> {
 ///
 /// In the future, this can be improved by associating each `Metric` instance to
 /// its callsite, eliminating the need for any maps.
-///
 #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
-pub struct MetricsLayer<S> {
+pub struct MetricsLayer<S, M> {
     inner: Filtered<InstrumentLayer, MetricsFilter, S>,
+    // We need to hold onto this so that the `InstrumentLayer` can use the created `Meter`.
+    _meter_provider: M,
 }
 
-impl<S> MetricsLayer<S>
+impl<S, M> MetricsLayer<S, M>
 where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
     /// Create a new instance of MetricsLayer.
-    pub fn new<M>(meter_provider: M) -> MetricsLayer<S>
+    pub fn new(meter_provider: M) -> MetricsLayer<S, M>
     where
         M: MeterProvider,
     {
@@ -396,6 +397,7 @@ where
 
         MetricsLayer {
             inner: layer.with_filter(MetricsFilter),
+            _meter_provider: meter_provider,
         }
     }
 }
@@ -467,7 +469,7 @@ where
     }
 }
 
-impl<S> Layer<S> for MetricsLayer<S>
+impl<S, M: 'static> Layer<S> for MetricsLayer<S, M>
 where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
