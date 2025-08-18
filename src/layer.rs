@@ -974,15 +974,10 @@ where
     fn start_cx(&self, otel_data: &mut OtelData) {
         if let OtelDataState::Context { .. } = &otel_data.state {
             // If the context is already started, we do nothing.
-        } else {
-            match take(&mut otel_data.state) {
-                OtelDataState::Builder { builder, parent_cx } => {
-                    let span = builder.start_with_context(&self.tracer, &parent_cx);
-                    let current_cx = parent_cx.with_span(span);
-                    otel_data.state = OtelDataState::Context { current_cx };
-                }
-                _ => (), // This should never happen.
-            }
+        } else if let OtelDataState::Builder { builder, parent_cx } = take(&mut otel_data.state) {
+            let span = builder.start_with_context(&self.tracer, &parent_cx);
+            let current_cx = parent_cx.with_span(span);
+            otel_data.state = OtelDataState::Context { current_cx };
         }
     }
 
