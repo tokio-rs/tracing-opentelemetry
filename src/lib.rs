@@ -117,26 +117,45 @@ mod metrics;
 mod layer;
 /// Span extension which enables OpenTelemetry context management.
 mod span_ext;
-/// Protocols for OpenTelemetry Tracers that are compatible with Tracing
-mod tracer;
+
+mod stack;
+
+use std::time::SystemTime;
 
 pub use layer::{layer, OpenTelemetryLayer};
 
 #[cfg(feature = "metrics")]
 pub use metrics::MetricsLayer;
 pub use span_ext::OpenTelemetrySpanExt;
-pub use tracer::PreSampledTracer;
 
 /// Per-span OpenTelemetry data tracked by this crate.
-///
-/// Useful for implementing [PreSampledTracer] in alternate otel SDKs.
-#[derive(Debug, Clone)]
-pub struct OtelData {
-    /// The parent otel `Context` for the current tracing span.
-    pub parent_cx: opentelemetry::Context,
+#[derive(Debug)]
+pub(crate) struct OtelData {
+    /// The state of the OtelData, which can either be a builder or a context.
+    state: OtelDataState,
+    /// The end time of the span if it has been exited.
+    end_time: Option<SystemTime>,
+}
 
-    /// The otel span data recorded during the current tracing span.
-    pub builder: opentelemetry::trace::SpanBuilder,
+/// The state of the OpenTelemetry data for a span.
+#[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
+pub(crate) enum OtelDataState {
+    /// The span is being built, with a parent context and a builder.
+    Builder {
+        parent_cx: opentelemetry::Context,
+        builder: opentelemetry::trace::SpanBuilder,
+    },
+    /// The span has been started or accessed and is now in a context.
+    Context { current_cx: opentelemetry::Context },
+}
+
+impl Default for OtelDataState {
+    fn default() -> Self {
+        OtelDataState::Context {
+            current_cx: opentelemetry::Context::default(),
+        }
+    }
 }
 
 pub(crate) mod time {

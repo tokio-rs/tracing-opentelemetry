@@ -37,7 +37,7 @@ fn trace_with_assigned_otel_context() {
 
     tracing::subscriber::with_default(subscriber, || {
         let child = tracing::debug_span!("child");
-        child.set_parent(cx);
+        child.set_parent(cx).unwrap();
     });
 
     drop(provider); // flush all spans
@@ -70,7 +70,7 @@ fn propagate_invalid_context() {
 
     tracing::subscriber::with_default(subscriber, || {
         let root = tracing::debug_span!("root");
-        root.set_parent(invalid_cx);
+        root.set_parent(invalid_cx).unwrap();
         root.in_scope(|| tracing::debug_span!("child"));
     });
 
@@ -90,7 +90,7 @@ fn inject_context_into_outgoing_requests() {
 
     tracing::subscriber::with_default(subscriber, || {
         let root = tracing::debug_span!("root");
-        root.set_parent(cx);
+        root.set_parent(cx).unwrap();
         let _g = root.enter();
         let child = tracing::debug_span!("child");
         propagator.inject_context(&child.context(), &mut outgoing_req_carrier);
@@ -121,8 +121,11 @@ fn sampling_decision_respects_new_parent() {
 
     tracing::subscriber::with_default(subscriber, || {
         let child = tracing::debug_span!("child");
+
+        child
+            .set_parent(Context::current_with_span(root_span))
+            .unwrap();
         child.context(); // force a sampling decision
-        child.set_parent(Context::current_with_span(root_span));
     });
 
     drop(provider); // flush all spans
@@ -139,6 +142,26 @@ fn sampling_decision_respects_new_parent() {
         spans[0].span_context.is_sampled(),
         "Child span should respect parent sampling decision"
     );
+}
+
+#[test]
+fn set_parent_fails_after_span_entered() {
+    let (_tracer, provider, _exporter, subscriber) = test_tracer();
+    let (cx, _, _, _) = build_sampled_context();
+
+    tracing::subscriber::with_default(subscriber, || {
+        let span = tracing::debug_span!("test_span");
+        let _guard = span.enter(); // Enter the span first
+
+        // Attempting to set parent after entering should fail
+        let result = span.set_parent(cx);
+        assert!(
+            result.is_err(),
+            "set_parent should fail after span is entered"
+        );
+    });
+
+    drop(provider);
 }
 
 fn assert_shared_attrs_eq(sc_a: &SpanContext, sc_b: &SpanContext) {

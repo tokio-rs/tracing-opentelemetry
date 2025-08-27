@@ -29,6 +29,7 @@ tracing-subscriber = { version = "0.3.0", default-features = false, features = [
 tracing-log = { version = "0.2.0", default-features = false, optional = true }
 rustversion = "1.0.9"
 smallvec = { version = "1.0", optional = true }
+thiserror = { version = "2", default-features = false }
 
 # Fix minimal-versions
 lazy_static = { version = "1.0.2", optional = true }
@@ -37,7 +38,7 @@ lazy_static = { version = "1.0.2", optional = true }
 async-trait = "0.1.56"
 criterion = { version = "0.5.1", default-features = false, features = ["html_reports"] }
 opentelemetry = { version = "0.30.0", features = ["trace", "metrics"] }
-opentelemetry_sdk = { version = "0.30.0", default-features = false, features = ["trace", "rt-tokio", "experimental_metrics_custom_reader"] }
+opentelemetry_sdk = { version = "0.30.0", default-features = false, features = ["trace", "rt-tokio", "experimental_metrics_custom_reader", "testing"] }
 opentelemetry-stdout = { version = "0.30.0", features = ["trace", "metrics"] }
 opentelemetry-otlp = { version = "0.30.0", features = ["metrics", "grpc-tonic"] }
 opentelemetry-semantic-conventions = { version = "0.30.0", features = ["semconv_experimental"] }

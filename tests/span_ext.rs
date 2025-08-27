@@ -165,3 +165,69 @@ fn test_add_event_with_timestamp() {
         event_data.timestamp
     );
 }
+
+#[test]
+fn test_add_link_variants() {
+    let (_tracer, provider, exporter, subscriber) = test_tracer();
+
+    let link_builder_cx = opentelemetry::trace::SpanContext::new(
+        opentelemetry::trace::TraceId::from_u128(0x1234567890abcdef1234567890abcdef),
+        opentelemetry::trace::SpanId::from_u64(0x1234567890abcdef),
+        opentelemetry::trace::TraceFlags::default(),
+        true, // Is remote
+        opentelemetry::trace::TraceState::default(),
+    );
+    let link_current_cx = opentelemetry::trace::SpanContext::new(
+        opentelemetry::trace::TraceId::from_u128(0xabcdef1234567890abcdef1234567890),
+        opentelemetry::trace::SpanId::from_u64(0xabcdef1234567890),
+        opentelemetry::trace::TraceFlags::default(),
+        true, // Is remote
+        opentelemetry::trace::TraceState::default(),
+    );
+    let link_attrs = vec![
+        opentelemetry::KeyValue::new("link_key_1", "link_value_1"),
+        opentelemetry::KeyValue::new("link_key_2", 123),
+    ];
+
+    tracing::subscriber::with_default(subscriber, || {
+        let root = tracing::debug_span!("root");
+        // Add the link using the extension method that now targets the builder
+        root.add_link(link_builder_cx.clone());
+        // Enter span to make it current for the link addition
+        let _enter = root.enter();
+        // Add the link using the extension method that now targets the span in the context
+        root.add_link_with_attributes(link_current_cx.clone(), link_attrs.clone());
+    });
+
+    drop(provider); // flush all spans
+    let spans = exporter.0.lock().unwrap();
+
+    assert_eq!(spans.len(), 1, "Should have exported exactly one span.");
+    let root_span_data = spans.first().unwrap();
+
+    assert_eq!(root_span_data.links.len(), 2, "Span should have two links.");
+    let mut links = root_span_data.links.iter().collect::<Vec<_>>();
+    links.sort_by(|a, b| {
+        a.span_context
+            .trace_id()
+            .to_string()
+            .cmp(&b.span_context.trace_id().to_string())
+    });
+    let link1 = &links[0];
+    let link2 = &links[1];
+
+    assert_eq!(
+        link1.span_context, link_builder_cx,
+        "Link 1 context mismatch."
+    );
+    assert_eq!(
+        link1.attributes,
+        vec![],
+        "Link 1 attributes should be empty."
+    );
+    assert_eq!(
+        link2.span_context, link_current_cx,
+        "Link 2 context mismatch."
+    );
+    assert_eq!(link2.attributes, link_attrs, "Link 2 attributes mismatch.");
+}
