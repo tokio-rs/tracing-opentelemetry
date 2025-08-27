@@ -38,7 +38,7 @@ impl<T: Debug> IdValueStack<T> {
     }
 
     #[cfg(test)]
-    pub(super) fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.stack.len()
     }
 }

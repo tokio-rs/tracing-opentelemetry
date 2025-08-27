@@ -6,6 +6,7 @@ use opentelemetry::{
     Context, Key, KeyValue, Value,
 };
 use std::{borrow::Cow, time::SystemTime};
+use thiserror::Error;
 
 /// Utility functions to allow tracing [`Span`]s to accept and return
 /// [OpenTelemetry] [`Context`]s.
@@ -16,6 +17,13 @@ use std::{borrow::Cow, time::SystemTime};
 pub trait OpenTelemetrySpanExt {
     /// Associates `self` with a given OpenTelemetry trace, using the provided
     /// parent [`Context`].
+    ///
+    /// This method exists primarily to make it possible to inject a _distributed_ incoming
+    /// context, e.g. span IDs, etc.
+    ///
+    /// A span's parent should only be set _once_, for the purpose described above.
+    /// Additionally, once a span has been fully built - and the SpanBuilder has been
+    /// consumed - the parent _cannot_ be mutated.
     ///
     /// This method provides error handling for cases where the span context
     /// cannot be set, such as when the OpenTelemetry layer is not present
@@ -50,7 +58,7 @@ pub trait OpenTelemetrySpanExt {
     /// // Or if the current span has been created elsewhere:
     /// let _ = Span::current().set_parent(parent_context);
     /// ```
-    fn set_parent(&self, cx: Context) -> Result<(), &'static str>;
+    fn set_parent(&self, cx: Context) -> Result<(), SetParentError>;
 
     /// Associates `self` with a given OpenTelemetry trace, using the provided
     /// followed span [`SpanContext`].
@@ -218,29 +226,31 @@ pub trait OpenTelemetrySpanExt {
     );
 }
 
+#[derive(Error, Debug)]
+pub enum SetParentError {
+    #[error("OpenTelemetry layer not found")]
+    LayerNotFound,
+    #[error("Span has already been started, cannot set parent")]
+    AlreadyStarted,
+    #[error("Span disabled")]
+    SpanDisabled,
+}
+
 impl OpenTelemetrySpanExt for tracing::Span {
-    ///
-    /// Allows us to set the parent context of this span. This method exists primarily to allow
-    /// us to pull in distributed_ incoming context - e.g. span IDs, etc - that have been read
-    /// into an existing context.
-    ///
-    /// A span's parent should only be set _once_, for the purpose described above.
-    /// Additionally, once a span has been fully built - and the SpanBuilder has been consumed -
-    /// the parent _cannot_ be mutated.
-    ///
-    fn set_parent(&self, cx: Context) -> Result<(), &'static str> {
+    fn set_parent(&self, cx: Context) -> Result<(), SetParentError> {
         let mut cx = Some(cx);
-        let mut result = Ok(());
-        let result_ref = &mut result;
 
         self.with_subscriber(move |(id, subscriber)| {
             let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
-                *result_ref = Err("OpenTelemetry layer not found");
-                return;
+                return Err(SetParentError::LayerNotFound);
             };
+
+            let mut result = Ok(());
+            let result_ref = &mut result;
             // Set the parent OTel for the current span
             get_context.with_context(subscriber, id, move |data| {
                 let Some(new_cx) = cx.take() else {
+                    *result_ref = Err(SetParentError::AlreadyStarted);
                     return;
                 };
                 // Create a new context with the new parent but preserve our span.
@@ -254,13 +264,13 @@ impl OpenTelemetrySpanExt for tracing::Span {
                         *parent_cx = new_cx;
                     }
                     OtelDataState::Context { .. } => {
-                        *result_ref = Err("Span has already been started, cannot set parent");
+                        *result_ref = Err(SetParentError::AlreadyStarted);
                     }
                 }
             });
-        });
-
-        result
+            result
+        })
+        .unwrap_or(Err(SetParentError::SpanDisabled))
     }
 
     fn add_link(&self, cx: SpanContext) {
@@ -324,8 +334,7 @@ impl OpenTelemetrySpanExt for tracing::Span {
             let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
                 return;
             };
-            let mut key = Some(key.into());
-            let mut value = Some(value.into());
+            let mut key_value = Some(KeyValue::new(key.into(), value.into()));
             get_context.with_context(subscriber, id, move |data| {
                 match &mut data.state {
                     OtelDataState::Builder { builder, .. } => {
@@ -336,12 +345,11 @@ impl OpenTelemetrySpanExt for tracing::Span {
                             .attributes
                             .as_mut()
                             .unwrap()
-                            .push(KeyValue::new(key.take().unwrap(), value.take().unwrap()));
+                            .push(key_value.take().unwrap());
                     }
                     OtelDataState::Context { current_cx } => {
                         let span = current_cx.span();
-                        let key_value = KeyValue::new(key.take().unwrap(), value.take().unwrap());
-                        span.set_attribute(key_value);
+                        span.set_attribute(key_value.take().unwrap());
                     }
                 };
             });

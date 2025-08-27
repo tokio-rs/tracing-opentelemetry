@@ -29,6 +29,7 @@ tracing-subscriber = { version = "0.3.0", default-features = false, features = [
 tracing-log = { version = "0.2.0", default-features = false, optional = true }
 rustversion = "1.0.9"
 smallvec = { version = "1.0", optional = true }
+thiserror = { version = "2", default-features = false }
 
 # Fix minimal-versions
 lazy_static = { version = "1.0.2", optional = true }
