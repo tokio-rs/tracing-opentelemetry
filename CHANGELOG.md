@@ -1,5 +1,10 @@
 # Unreleased
 
+### Breaking Changes
+
+- The attributes `code.filepath`, `code.lineno`, and `code.namespace` have been renamed to `code.file.path`, and
+  `code.line.number`, and `code.module.name`, to align with the opentelemetry semantic conventions for code.
+
 ### Removed
 
 - Feature `metrics_gauge_unstable` since metrics gauge are stable in upstream now.

@@ -1041,15 +1041,15 @@ where
             let meta = attrs.metadata();
 
             if let Some(filename) = meta.file() {
-                builder_attrs.push(KeyValue::new("code.filepath", filename));
+                builder_attrs.push(KeyValue::new("code.file.path", filename));
             }
 
             if let Some(module) = meta.module_path() {
-                builder_attrs.push(KeyValue::new("code.namespace", module));
+                builder_attrs.push(KeyValue::new("code.module.name", module));
             }
 
             if let Some(line) = meta.line() {
-                builder_attrs.push(KeyValue::new("code.lineno", line as i64));
+                builder_attrs.push(KeyValue::new("code.line.number", line as i64));
             }
         }
 
@@ -1283,17 +1283,17 @@ where
                     if let Some(file) = file {
                         otel_event
                             .attributes
-                            .push(KeyValue::new("code.filepath", file));
+                            .push(KeyValue::new("code.file.path", file));
                     }
                     if let Some(module) = module {
                         otel_event
                             .attributes
-                            .push(KeyValue::new("code.namespace", module));
+                            .push(KeyValue::new("code.module.name", module));
                     }
                     if let Some(line) = meta.line() {
                         otel_event
                             .attributes
-                            .push(KeyValue::new("code.lineno", line as i64));
+                            .push(KeyValue::new("code.line.number", line as i64));
                     }
                 }
 
@@ -1833,9 +1833,9 @@ mod tests {
 
         let attributes = tracer.attributes();
 
-        assert!(attributes.contains_key("code.filepath"));
-        assert!(attributes.contains_key("code.namespace"));
-        assert!(attributes.contains_key("code.lineno"));
+        assert!(attributes.contains_key("code.file.path"));
+        assert!(attributes.contains_key("code.module.name"));
+        assert!(attributes.contains_key("code.line.number"));
     }
 
     #[test]
@@ -1863,9 +1863,9 @@ mod tests {
 
         let attributes = tracer.attributes();
 
-        assert!(!attributes.contains_key("code.filepath"));
-        assert!(!attributes.contains_key("code.namespace"));
-        assert!(!attributes.contains_key("code.lineno"));
+        assert!(!attributes.contains_key("code.file.path"));
+        assert!(!attributes.contains_key("code.module.name"));
+        assert!(!attributes.contains_key("code.line.number"));
     }
 
     #[test]
