@@ -1999,10 +1999,7 @@ mod tests {
         });
 
         let attributes = tracer.attributes();
-        let keys = attributes
-            .iter()
-            .map(|(k, _)| k.as_str())
-            .collect::<Vec<&str>>();
+        let keys = attributes.keys().map(|k| k.as_str()).collect::<Vec<&str>>();
         assert!(keys.contains(&"target"));
     }
 
@@ -2017,10 +2014,7 @@ mod tests {
         });
 
         let attributes = tracer.attributes();
-        let keys = attributes
-            .iter()
-            .map(|(k, _)| k.as_str())
-            .collect::<Vec<&str>>();
+        let keys = attributes.keys().map(|k| k.as_str()).collect::<Vec<&str>>();
         assert!(!keys.contains(&"target"));
     }
 
