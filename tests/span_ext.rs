@@ -171,15 +171,15 @@ fn test_add_link_variants() {
     let (_tracer, provider, exporter, subscriber) = test_tracer();
 
     let link_builder_cx = opentelemetry::trace::SpanContext::new(
-        opentelemetry::trace::TraceId::from_u128(0x1234567890abcdef1234567890abcdef),
-        opentelemetry::trace::SpanId::from_u64(0x1234567890abcdef),
+        opentelemetry::trace::TraceId::from(0x1234567890abcdef1234567890abcdef),
+        opentelemetry::trace::SpanId::from(0x1234567890abcdef),
         opentelemetry::trace::TraceFlags::default(),
         true, // Is remote
         opentelemetry::trace::TraceState::default(),
     );
     let link_current_cx = opentelemetry::trace::SpanContext::new(
-        opentelemetry::trace::TraceId::from_u128(0xabcdef1234567890abcdef1234567890),
-        opentelemetry::trace::SpanId::from_u64(0xabcdef1234567890),
+        opentelemetry::trace::TraceId::from(0xabcdef1234567890abcdef1234567890),
+        opentelemetry::trace::SpanId::from(0xabcdef1234567890),
         opentelemetry::trace::TraceFlags::default(),
         true, // Is remote
         opentelemetry::trace::TraceState::default(),

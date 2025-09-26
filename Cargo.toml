@@ -46,8 +46,8 @@ async-trait = "0.1.56"
 criterion = { version = "0.5.1", default-features = false, features = [
     "html_reports",
 ] }
-opentelemetry = { version = "0.30.0", features = ["trace", "metrics"] }
-opentelemetry_sdk = { version = "0.30.0", default-features = false, features = [
+opentelemetry = { version = "0.31.0", features = ["trace", "metrics"] }
+opentelemetry_sdk = { version = "0.31.0", default-features = false, features = [
     "trace",
     "rt-tokio",
     "experimental_metrics_custom_reader",
