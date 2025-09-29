@@ -4,6 +4,9 @@
 
 - The attributes `code.filepath`, `code.lineno`, and `code.namespace` have been renamed to `code.file.path`, and
   `code.line.number`, and `code.module.name`, to align with the opentelemetry semantic conventions for code.
+- Upgrade from opentelemetry 0.30.0 to 0.31.0. Refer to the upstream
+  [changelog](https://github.com/open-telemetry/opentelemetry-rust/blob/main/opentelemetry-sdk/CHANGELOG.md#0310)
+  for more information.
 
 ### Removed
 
