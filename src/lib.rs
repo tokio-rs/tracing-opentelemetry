@@ -126,15 +126,50 @@ pub use layer::{layer, OpenTelemetryLayer};
 
 #[cfg(feature = "metrics")]
 pub use metrics::MetricsLayer;
+use opentelemetry::trace::TraceContextExt as _;
 pub use span_ext::OpenTelemetrySpanExt;
 
 /// Per-span OpenTelemetry data tracked by this crate.
 #[derive(Debug)]
-pub(crate) struct OtelData {
+pub struct OtelData {
     /// The state of the OtelData, which can either be a builder or a context.
     state: OtelDataState,
     /// The end time of the span if it has been exited.
     end_time: Option<SystemTime>,
+}
+
+impl OtelData {
+    /// Gets the trace ID of the span.
+    ///
+    /// Returns `None` if the context has not been built yet. This can be forced e.g. by calling
+    /// [`context`] on the span (not on `OtelData`) or if [context activation] was not explicitly
+    /// opted-out of, simply entering the span for the first time.
+    ///
+    /// [`context`]: OpenTelemetrySpanExt::context
+    /// [context activation]: OpenTelemetryLayer::with_context_activation
+    pub fn trace_id(&self) -> Option<opentelemetry::TraceId> {
+        if let OtelDataState::Context { current_cx } = &self.state {
+            Some(current_cx.span().span_context().trace_id())
+        } else {
+            None
+        }
+    }
+
+    /// Gets the span ID of the span.
+    ///
+    /// Returns `None` if the context has not been built yet. This can be forced e.g. by calling
+    /// [`context`] on the span (not on `OtelData`) or if [context activation] was not explicitly
+    /// opted-out of, simply entering the span for the first time.
+    ///
+    /// [`context`]: OpenTelemetrySpanExt::context
+    /// [context activation]: OpenTelemetryLayer::with_context_activation
+    pub fn span_id(&self) -> Option<opentelemetry::SpanId> {
+        if let OtelDataState::Context { current_cx } = &self.state {
+            Some(current_cx.span().span_context().span_id())
+        } else {
+            None
+        }
+    }
 }
 
 /// The state of the OpenTelemetry data for a span.
