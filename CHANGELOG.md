@@ -1,16 +1,41 @@
-# Unreleased
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.32.0](https://github.com/tokio-rs/tracing-opentelemetry/compare/v0.31.0...v0.32.0) - 2025-09-29
+
+### Added
+
+- Add configuration for including `target` in spans ([#222](https://github.com/tokio-rs/tracing-opentelemetry/pull/222))
+
+### Changed
+
+- OpenTelemetry context activation ([#202](https://github.com/tokio-rs/tracing-opentelemetry/pull/202))
+  - Trace ID and span ID can be obtained from `OtelData` via dedicated functions. Note that these
+    will be available only if the context has already been built. (#233)
+- Correctly track entered and exited state for timings ([#212](https://github.com/tokio-rs/tracing-opentelemetry/pull/212))
+- Slightly improve error message on version mismatch ([#211](https://github.com/tokio-rs/tracing-opentelemetry/pull/211))
+- Remove Lazy for thread_local static ([#215](https://github.com/tokio-rs/tracing-opentelemetry/pull/215))
+- Update description of special fields and semantic conventions
 
 ### Breaking Changes
 
-- The attributes `code.filepath`, `code.lineno`, and `code.namespace` have been renamed to `code.file.path`, and
-  `code.line.number`, and `code.module.name`, to align with the opentelemetry semantic conventions for code.
-- Upgrade from opentelemetry 0.30.0 to 0.31.0. Refer to the upstream
+- The attributes `code.filepath`, `code.lineno`, and `code.namespace` have been renamed to
+  `code.file.path`, and `code.line.number`, and `code.module.name`, to align with the opentelemetry
+  semantic conventions for code. ([#225](https://github.com/tokio-rs/tracing-opentelemetry/pull/225))
+- Upgrade from opentelemetry to 0.31.0. Refer to the upstream
   [changelog](https://github.com/open-telemetry/opentelemetry-rust/blob/main/opentelemetry-sdk/CHANGELOG.md#0310)
-  for more information.
+  for more information. ([#230](https://github.com/tokio-rs/tracing-opentelemetry/pull/230))
+- Hold onto `MetricsProvider` in `MetricsLayer` ([#224](https://github.com/tokio-rs/tracing-opentelemetry/pull/224))
+- The attribute `otel.status_message` was changed to `otel.status_description` to align with the
+  opentelemetry semantic conventions for code.  ([#209](https://github.com/tokio-rs/tracing-opentelemetry/pull/209))
+- Remove the `metrics_gauge_unstable` feature.
 
-### Removed
-
-- Feature `metrics_gauge_unstable` since metrics gauge are stable in upstream now.
 
 # 0.31.0 (June 2, 2025)
 
