@@ -711,9 +711,8 @@ where
         }
     }
 
-    /// Sets whether or not an event considered for exception mapping (see [`OpenTelemetryLayer::with_error_recording`])
+    /// Sets whether or not an event considered for exception mapping (see [`OpenTelemetryLayer::with_error_records_to_exceptions`])
     /// should be propagated to the span status error description.
-    ///
     ///
     /// By default, these events do set the span status error description.
     pub fn with_error_events_to_status(self, error_events_to_status: bool) -> Self {
