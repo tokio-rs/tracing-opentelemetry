@@ -102,7 +102,7 @@
 #![cfg_attr(
     docsrs,
     // Allows displaying cfgs/feature flags in the documentation.
-    feature(doc_cfg, doc_auto_cfg),
+    feature(doc_cfg),
     // Allows adding traits to RustDoc's list of "notable traits"
     feature(doc_notable_trait),
     // Fail the docs build if any intra-docs links are broken
