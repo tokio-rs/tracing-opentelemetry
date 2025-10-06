@@ -180,6 +180,7 @@ pub(crate) enum OtelDataState {
     Builder {
         parent_cx: opentelemetry::Context,
         builder: opentelemetry::trace::SpanBuilder,
+        status: opentelemetry::trace::Status,
     },
     /// The span has been started or accessed and is now in a context.
     Context { current_cx: opentelemetry::Context },

@@ -363,8 +363,8 @@ impl OpenTelemetrySpanExt for tracing::Span {
                 return;
             };
             get_context.with_context(subscriber, id, move |data| match &mut data.state {
-                OtelDataState::Builder { builder, .. } => {
-                    builder.status = status.take().unwrap();
+                OtelDataState::Builder { status: s, .. } => {
+                    *s = status.take().unwrap();
                 }
                 OtelDataState::Context { current_cx } => {
                     let span = current_cx.span();
