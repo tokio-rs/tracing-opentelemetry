@@ -163,7 +163,7 @@ struct SpanBuilderUpdates {
 }
 
 impl SpanBuilderUpdates {
-    fn update(self, span_builder: &mut SpanBuilder) {
+    fn update(self, span_builder: &mut SpanBuilder, s: &mut Status) {
         let Self {
             name,
             span_kind,
@@ -178,7 +178,7 @@ impl SpanBuilderUpdates {
             span_builder.span_kind = Some(span_kind);
         }
         if let Some(status) = status {
-            span_builder.status = status;
+            *s = status;
         }
         if let Some(attributes) = attributes {
             if let Some(builder_attributes) = &mut span_builder.attributes {
@@ -973,8 +973,14 @@ where
     fn start_cx(&self, otel_data: &mut OtelData) {
         if let OtelDataState::Context { .. } = &otel_data.state {
             // If the context is already started, we do nothing.
-        } else if let OtelDataState::Builder { builder, parent_cx } = take(&mut otel_data.state) {
-            let span = builder.start_with_context(&self.tracer, &parent_cx);
+        } else if let OtelDataState::Builder {
+            builder,
+            parent_cx,
+            status,
+        } = take(&mut otel_data.state)
+        {
+            let mut span = builder.start_with_context(&self.tracer, &parent_cx);
+            span.set_status(status);
             let current_cx = parent_cx.with_span(span);
             otel_data.state = OtelDataState::Context { current_cx };
         }
@@ -1076,9 +1082,14 @@ where
             sem_conv_config: self.sem_conv_config,
         });
 
-        updates.update(&mut builder);
+        let mut status = Status::Unset;
+        updates.update(&mut builder, &mut status);
         extensions.insert(OtelData {
-            state: OtelDataState::Builder { builder, parent_cx },
+            state: OtelDataState::Builder {
+                builder,
+                parent_cx,
+                status,
+            },
             end_time: None,
         });
     }
@@ -1152,9 +1163,11 @@ where
         let mut extensions = span.extensions_mut();
         if let Some(otel_data) = extensions.get_mut::<OtelData>() {
             match &mut otel_data.state {
-                OtelDataState::Builder { builder, .. } => {
+                OtelDataState::Builder {
+                    builder, status, ..
+                } => {
                     // If the builder is present, then update it.
-                    updates.update(builder);
+                    updates.update(builder, status);
                 }
                 OtelDataState::Context { current_cx, .. } => {
                     // If the Context has been created, then update the span.
@@ -1297,14 +1310,16 @@ where
                 }
 
                 match &mut otel_data.state {
-                    OtelDataState::Builder { builder, .. } => {
-                        if builder.status == otel::Status::Unset
+                    OtelDataState::Builder {
+                        builder, status, ..
+                    } => {
+                        if *status == otel::Status::Unset
                             && *meta.level() == tracing_core::Level::ERROR
                         {
-                            builder.status = otel::Status::error("");
+                            *status = otel::Status::error("");
                         }
                         if let Some(builder_updates) = builder_updates {
-                            builder_updates.update(builder);
+                            builder_updates.update(builder, status);
                         }
                         if let Some(ref mut events) = builder.events {
                             events.push(otel_event);
@@ -1357,12 +1372,17 @@ where
             });
 
             match state {
-                OtelDataState::Builder { builder, parent_cx } => {
+                OtelDataState::Builder {
+                    builder,
+                    parent_cx,
+                    status,
+                } => {
                     // Don't create the context here just to get a SpanRef since it's costly
                     let mut span = builder.start_with_context(&self.tracer, &parent_cx);
                     if let Some(timings) = timings {
                         span.set_attributes(timings)
                     };
+                    span.set_status(status);
                     if let Some(end_time) = end_time {
                         span.end_with_timestamp(end_time);
                     } else {
