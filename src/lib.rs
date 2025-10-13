@@ -127,7 +127,7 @@ pub use layer::{layer, OpenTelemetryLayer};
 #[cfg(feature = "metrics")]
 pub use metrics::MetricsLayer;
 use opentelemetry::trace::TraceContextExt as _;
-pub use span_ext::OpenTelemetrySpanExt;
+pub use span_ext::{OpenTelemetrySpanExt, SetParentError};
 
 /// Per-span OpenTelemetry data tracked by this crate.
 #[derive(Debug)]
