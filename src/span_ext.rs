@@ -226,12 +226,25 @@ pub trait OpenTelemetrySpanExt {
     );
 }
 
+/// An error returned if [`OpenTelemetrySpanExt::set_parent`] could not set the parent.
 #[derive(Error, Debug)]
 pub enum SetParentError {
+    /// The layer could not be found and therefore the action could not be carried out. This can
+    /// happen with some advanced layers that do not handle downcasting well, for example
+    /// [`tracing_subscriber::reload::Layer`].
     #[error("OpenTelemetry layer not found")]
     LayerNotFound,
+
+    /// The span has been already started.
+    ///
+    /// Someone already called a context-starting method such as [`OpenTelemetrySpanExt::context`]
+    /// or the span has been entered and automatic context starting was not configured out.
     #[error("Span has already been started, cannot set parent")]
     AlreadyStarted,
+
+    /// The span is filtered out by tracing filters.
+    ///
+    /// If the filtered out span had children, they will not be connected to the parent span either.
     #[error("Span disabled")]
     SpanDisabled,
 }
