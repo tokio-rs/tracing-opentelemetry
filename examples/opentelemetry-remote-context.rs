@@ -1,15 +1,19 @@
-use opentelemetry::{global, Context};
+use opentelemetry::global;
+use opentelemetry::trace::TraceContextExt;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use std::collections::HashMap;
-use tracing::span;
+use tracing::{span, Span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
 
-fn make_request(_cx: Context) {
-    // perform external request after injecting context
-    // e.g. if there are request headers that impl `opentelemetry::propagation::Injector`
-    // then `propagator.inject_context(cx, request.headers_mut())`
+fn make_request() {
+    let context = Span::current().context();
+
+    assert!(context.span().span_context().is_valid());
+
+    // Perform external request after injecting context. See `opentelemetry::propagation` for
+    // details.
 }
 
 fn build_example_carrier() -> HashMap<String, String> {
@@ -37,10 +41,21 @@ fn main() {
         let app_root = span!(tracing::Level::INFO, "app_start");
 
         // Assign parent trace from external context
-        let _ = app_root.set_parent(parent_context);
+        if let Err(error) = app_root.set_parent(parent_context) {
+            tracing::error!(
+                error = debug(error),
+                "Unable to set OpenTelemetry parent, span relationships will be wrong!"
+            );
+            // You don't want to panic in this case in production environment. Instead, you can log
+            // this to know your traces may have wrong relationships but let the business logic
+            // continue.
+            panic!("Could not set parent.");
+        }
 
-        // To include tracing context in client requests from _this_ app,
-        // use `context` to extract the current OpenTelemetry context.
-        make_request(app_root.context());
+        app_root.in_scope(|| {
+            // The context can be accessed in the `tracing` span. Just make sure that the correct
+            // `tracing` span is entered and the propagating library should be able to handle it.
+            make_request();
+        });
     });
 }
