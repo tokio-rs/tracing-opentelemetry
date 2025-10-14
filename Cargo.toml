@@ -85,6 +85,9 @@ web-time = "1.0.0"
 [lib]
 bench = false
 
+[lints.rust]
+unnameable_types = "warn"
+
 [[bench]]
 name = "trace"
 harness = false
