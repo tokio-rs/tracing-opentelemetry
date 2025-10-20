@@ -5,8 +5,7 @@ use opentelemetry::{
     trace::{SpanContext, Status, TraceContextExt},
     Context, Key, KeyValue, Value,
 };
-use std::{borrow::Cow, time::SystemTime};
-use thiserror::Error;
+use std::{borrow::Cow, fmt, time::SystemTime};
 
 /// Utility functions to allow tracing [`Span`]s to accept and return
 /// [OpenTelemetry] [`Context`]s.
@@ -227,27 +226,42 @@ pub trait OpenTelemetrySpanExt {
 }
 
 /// An error returned if [`OpenTelemetrySpanExt::set_parent`] could not set the parent.
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum SetParentError {
     /// The layer could not be found and therefore the action could not be carried out. This can
     /// happen with some advanced layers that do not handle downcasting well, for example
     /// [`tracing_subscriber::reload::Layer`].
-    #[error("OpenTelemetry layer not found")]
     LayerNotFound,
 
     /// The span has been already started.
     ///
     /// Someone already called a context-starting method such as [`OpenTelemetrySpanExt::context`]
     /// or the span has been entered and automatic context starting was not configured out.
-    #[error("Span has already been started, cannot set parent")]
     AlreadyStarted,
 
     /// The span is filtered out by tracing filters.
     ///
     /// If the filtered out span had children, they will not be connected to the parent span either.
-    #[error("Span disabled")]
     SpanDisabled,
 }
+
+impl fmt::Display for SetParentError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SetParentError::LayerNotFound => {
+                write!(f, "OpenTelemetry layer not found")
+            }
+            SetParentError::AlreadyStarted => {
+                write!(f, "Span has already been started, cannot set parent")
+            }
+            SetParentError::SpanDisabled => {
+                write!(f, "Span disabled")
+            }
+        }
+    }
+}
+
+impl std::error::Error for SetParentError {}
 
 impl OpenTelemetrySpanExt for tracing::Span {
     fn set_parent(&self, cx: Context) -> Result<(), SetParentError> {

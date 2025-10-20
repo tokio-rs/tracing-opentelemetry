@@ -34,15 +34,12 @@ tracing-subscriber = { version = "0.3.0", default-features = false, features = [
     "std",
 ] }
 tracing-log = { version = "0.2.0", default-features = false, optional = true }
-rustversion = "1.0.9"
 smallvec = { version = "1.0", optional = true }
-thiserror = { version = "2", default-features = false }
 
 # Fix minimal-versions
 lazy_static = { version = "1.0.2", optional = true }
 
 [dev-dependencies]
-async-trait = "0.1.56"
 criterion = { version = "0.5.1", default-features = false, features = [
     "html_reports",
 ] }
@@ -61,9 +58,7 @@ opentelemetry-otlp = { version = "0.31.0", features = [
 opentelemetry-semantic-conventions = { version = "0.31.0", features = [
     "semconv_experimental",
 ] }
-futures-util = { version = "0.3.17", default-features = false }
 tokio = { version = "1", features = ["full"] }
-tokio-stream = "0.1"
 tracing = { version = "0.1.35", default-features = false, features = [
     "std",
     "attributes",
