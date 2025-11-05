@@ -19,7 +19,7 @@ use tracing_core::{field, Event, Subscriber};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::layer::Filter;
-use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::registry::{ExtensionsMut, LookupSpan};
 use tracing_subscriber::Layer;
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 use web_time::Instant;
@@ -118,6 +118,14 @@ pub(crate) struct WithContext {
     #[allow(clippy::type_complexity)]
     pub(crate) with_activated_context:
         fn(&tracing::Dispatch, &span::Id, f: &mut dyn FnMut(&mut OtelData)),
+
+    ///
+    /// Ensures the given SpanId has been activated - that is, created in the OTel side of things,
+    /// and had its SpanBuilder consumed - and then provides access to the OtelData associated with it.
+    ///
+    #[allow(clippy::type_complexity)]
+    pub(crate) with_activated_context_extensions:
+        fn(&tracing::Dispatch, &mut ExtensionsMut<'_>, f: &mut dyn FnMut(&mut OtelData)),
 }
 
 impl WithContext {
@@ -146,6 +154,20 @@ impl WithContext {
         mut f: impl FnMut(&mut OtelData),
     ) {
         (self.with_activated_context)(dispatch, id, &mut f)
+    }
+
+    ///
+    /// Ensures the given SpanId has been activated - that is, created in the OTel side of things,
+    /// and had its SpanBuilder consumed - and then provides access to the OtelData associated with it.
+    ///
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn with_activated_context_extensions(
+        &self,
+        dispatch: &tracing::Dispatch,
+        extensions: &mut ExtensionsMut<'_>,
+        mut f: impl FnMut(&mut OtelData),
+    ) {
+        (self.with_activated_context_extensions)(dispatch, extensions, &mut f)
     }
 }
 
@@ -639,6 +661,7 @@ where
             with_context: WithContext {
                 with_context: Self::get_context,
                 with_activated_context: Self::get_activated_context,
+                with_activated_context_extensions: Self::get_activated_context_extensions,
             },
             _registry: marker::PhantomData,
         }
@@ -694,6 +717,8 @@ where
             with_context: WithContext {
                 with_context: OpenTelemetryLayer::<S, Tracer>::get_context,
                 with_activated_context: OpenTelemetryLayer::<S, Tracer>::get_activated_context,
+                with_activated_context_extensions:
+                    OpenTelemetryLayer::<S, Tracer>::get_activated_context_extensions,
             },
             _registry: self._registry,
             // cannot use ``..self` here due to different generics
@@ -963,11 +988,20 @@ where
             .span(id)
             .expect("registry should have a span for the current ID");
 
+        let mut extensions = span.extensions_mut();
+
+        Self::get_activated_context_extensions(dispatch, &mut extensions, f)
+    }
+
+    fn get_activated_context_extensions(
+        dispatch: &tracing::Dispatch,
+        extensions: &mut ExtensionsMut<'_>,
+        f: &mut dyn FnMut(&mut OtelData),
+    ) {
         let layer = dispatch
             .downcast_ref::<OpenTelemetryLayer<S, T>>()
             .expect("layer should downcast to expected type; this is a bug!");
 
-        let mut extensions = span.extensions_mut();
         if let Some(otel_data) = extensions.get_mut::<OtelData>() {
             // Activate the context
             layer.start_cx(otel_data);
