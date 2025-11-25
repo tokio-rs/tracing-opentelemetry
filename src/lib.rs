@@ -122,7 +122,7 @@ mod stack;
 
 use std::time::SystemTime;
 
-pub use layer::{layer, OpenTelemetryLayer};
+pub use layer::{layer, FilteredOpenTelemetryLayer, OpenTelemetryLayer};
 
 #[cfg(feature = "metrics")]
 pub use metrics::MetricsLayer;

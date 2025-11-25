@@ -1,5 +1,6 @@
 use crate::stack::IdValueStack;
 use crate::{OtelData, OtelDataState};
+pub use filtered::FilteredOpenTelemetryLayer;
 use opentelemetry::ContextGuard;
 use opentelemetry::{
     trace::{self as otel, noop, Span, SpanBuilder, SpanKind, Status, TraceContextExt},
@@ -17,15 +18,19 @@ use tracing_core::{field, Event, Subscriber};
 #[cfg(feature = "tracing-log")]
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::layer::Context;
+use tracing_subscriber::layer::Filter;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::Layer;
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 use web_time::Instant;
 
+mod filtered;
+
 const SPAN_NAME_FIELD: &str = "otel.name";
 const SPAN_KIND_FIELD: &str = "otel.kind";
 const SPAN_STATUS_CODE_FIELD: &str = "otel.status_code";
 const SPAN_STATUS_DESCRIPTION_FIELD: &str = "otel.status_description";
+const SPAN_EVENT_COUNT_FIELD: &str = "otel.tracing_event_count";
 
 const EVENT_EXCEPTION_NAME: &str = "exception";
 const FIELD_EXCEPTION_MESSAGE: &str = "exception.message";
@@ -846,6 +851,18 @@ where
         }
     }
 
+    /// Adds a filter for events that counts all events that came to the layer. See
+    /// [`FilteredOpenTelemetryLayer`] for more details.
+    ///
+    /// If you just want to filter the events out and you don't need to count how many happened, you
+    /// can use [`Layer::with_filter`] instead.
+    pub fn with_counting_event_filter<F: Filter<S>>(
+        self,
+        filter: F,
+    ) -> FilteredOpenTelemetryLayer<S, T, F> {
+        FilteredOpenTelemetryLayer::new(self, filter)
+    }
+
     /// Retrieve the parent OpenTelemetry [`Context`] from the current tracing
     /// [`span`] through the [`Registry`]. This [`Context`] links spans to their
     /// parent for proper hierarchical visualization.
@@ -1450,6 +1467,7 @@ mod tests {
     use opentelemetry_sdk::trace::SpanExporter;
     use std::{collections::HashMap, error::Error, fmt::Display, time::SystemTime};
     use tracing::trace_span;
+    use tracing_core::LevelFilter;
     use tracing_subscriber::prelude::*;
 
     #[derive(Debug, Clone)]
@@ -1768,6 +1786,54 @@ mod tests {
         assert_eq!(iter.next().unwrap().name, "exception"); // error attribute is handled specially
         assert_eq!(iter.next().unwrap().name, "field3"); // message attribute is handled specially
         assert_eq!(iter.next().unwrap().name, "event name 5"); // name attribute should not conflict with event name.
+    }
+
+    #[test]
+    fn event_filter_count() {
+        let mut tracer = TestTracer::default();
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_counting_event_filter(LevelFilter::INFO)
+                .with_filter(LevelFilter::DEBUG),
+        );
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug_span!("test span").in_scope(|| {
+                tracing::event!(tracing::Level::TRACE, "1");
+                tracing::event!(tracing::Level::DEBUG, "2");
+                tracing::event!(tracing::Level::INFO, "3");
+                tracing::event!(tracing::Level::WARN, "4");
+                tracing::event!(tracing::Level::ERROR, "5");
+            });
+        });
+
+        let events = tracer.with_data(|data| data.events.clone());
+
+        let mut iter = events.iter();
+
+        assert_eq!(iter.next().unwrap().name, "3");
+        assert_eq!(iter.next().unwrap().name, "4");
+        assert_eq!(iter.next().unwrap().name, "5");
+        assert!(iter.next().is_none());
+
+        let spans = tracer.spans();
+        assert_eq!(spans.len(), 1);
+
+        let Value::I64(event_count) = spans
+            .first()
+            .unwrap()
+            .attributes
+            .iter()
+            .find(|key_value| key_value.key.as_str() == SPAN_EVENT_COUNT_FIELD)
+            .unwrap()
+            .value
+        else {
+            panic!("Unexpected type of `{SPAN_EVENT_COUNT_FIELD}`.");
+        };
+        // We've sent 5 events out of which 1 was filtered out by an actual filter and another by
+        // our event filter.
+        assert_eq!(event_count, 4);
     }
 
     #[test]
