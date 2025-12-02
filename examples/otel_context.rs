@@ -4,10 +4,10 @@
 use opentelemetry::trace::{TraceContextExt, TracerProvider as _};
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use opentelemetry_stdout as stdout;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tracing::{debug, info, span, warn, Subscriber};
 use tracing::{dispatcher::WeakDispatch, level_filters::LevelFilter, Dispatch};
-use tracing_opentelemetry::{layer, OpenTelemetryContext};
+use tracing_opentelemetry::{get_otel_context, layer};
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::registry::LookupSpan;
@@ -15,12 +15,12 @@ use tracing_subscriber::Layer;
 
 /// A custom layer that demonstrates how to use OpenTelemetryContext
 /// to extract OpenTelemetry contexts from span extensions.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct SpanAnalysisLayer {
     /// Store span analysis results for demonstration
     analysis_results: Arc<Mutex<Vec<SpanAnalysis>>>,
     /// Weak reference to the dispatcher for context extraction
-    dispatch: Arc<RwLock<Option<WeakDispatch>>>,
+    dispatch: Arc<OnceLock<WeakDispatch>>,
 }
 
 #[derive(Debug, Clone)]
@@ -32,13 +32,6 @@ struct SpanAnalysis {
 }
 
 impl SpanAnalysisLayer {
-    fn new() -> Self {
-        Self {
-            analysis_results: Arc::new(Mutex::new(Vec::new())),
-            dispatch: Arc::new(RwLock::new(None)),
-        }
-    }
-
     fn get_analysis_results(&self) -> Vec<SpanAnalysis> {
         self.analysis_results.lock().unwrap().clone()
     }
@@ -68,46 +61,23 @@ impl SpanAnalysisLayer {
             }
         }
     }
-
-    fn get_weak_dispatch(&self, get_default: bool) -> Option<WeakDispatch> {
-        let read_guard = self.dispatch.read().unwrap();
-        match read_guard.as_ref() {
-            Some(weak_dispatch) => Some(weak_dispatch.clone()),
-            // Note: This workaround is needed until https://github.com/tokio-rs/tracing/pull/3379
-            // is merged and released. It should really be handled in on_register_dispatch
-            None => {
-                if !get_default {
-                    None
-                } else {
-                    drop(read_guard);
-                    let mut dispatch = self.dispatch.write().unwrap();
-                    let weak_dispatch = Dispatch::default().downgrade();
-                    *dispatch = Some(weak_dispatch.clone());
-                    Some(weak_dispatch)
-                }
-            }
-        }
-    }
 }
 
 impl<S> Layer<S> for SpanAnalysisLayer
 where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
+    fn on_register_dispatch(&self, subscriber: &Dispatch) {
+        let _ = self.dispatch.set(subscriber.downgrade());
+    }
+
     fn on_new_span(
         &self,
         attrs: &tracing::span::Attributes<'_>,
         id: &tracing::span::Id,
         ctx: Context<'_, S>,
     ) {
-        // Get the weak dispatch reference.
-        //
-        // Note: We can't use the Dispatch::default() workaround described above here since this
-        // method is called from inside a dispatcher::get_default block, and such calls can't be
-        // nested so we would get the global dispatcher instead, which can't downcast to the right
-        // types when extracting the OpenTelemetry context. This also means that we will miss
-        // analyzing the first span that is created 🤷🏼‍♂️
-        let Some(weak_dispatch) = self.get_weak_dispatch(false) else {
+        let Some(weak_dispatch) = self.dispatch.get() else {
             return;
         };
 
@@ -116,45 +86,38 @@ where
             // This is the key functionality: using OpenTelemetryContext
             // to extract the OpenTelemetry context from span extensions
             let mut extensions = span_ref.extensions_mut();
-            if let Some(otel_context) =
-                OpenTelemetryContext::context(&mut extensions, &weak_dispatch.upgrade())
-            {
-                self.analyze_span_context(attrs.metadata().name(), &otel_context);
-            } else {
-                println!(
-                    "⚠️  Could not extract OpenTelemetry context for span '{}'",
-                    attrs.metadata().name()
-                );
-            }
-        }
-    }
-
-    fn on_enter(&self, id: &tracing::span::Id, ctx: Context<'_, S>) {
-        if let Some(weak_dispatch) = self.get_weak_dispatch(true) {
-            if let Some(span_ref) = ctx.span(id) {
-                let mut extensions = span_ref.extensions_mut();
-                if let Some(otel_context) =
-                    OpenTelemetryContext::context(&mut extensions, &weak_dispatch.upgrade())
-                {
-                    let span = otel_context.span();
-                    let span_context = span.span_context();
-                    if span_context.is_valid() {
-                        println!(
-                            "📍 Entering span with trace_id: {:032x}, span_id: {:016x}",
-                            span_context.trace_id(),
-                            span_context.span_id()
-                        );
-                    }
+            if let Some(dispatch) = weak_dispatch.upgrade() {
+                if let Some(otel_context) = get_otel_context(&mut extensions, &dispatch) {
+                    self.analyze_span_context(attrs.metadata().name(), &otel_context);
+                } else {
+                    println!(
+                        "⚠️  Could not extract OpenTelemetry context for span '{}'",
+                        attrs.metadata().name()
+                    );
                 }
             }
         }
     }
 
-    fn on_register_dispatch(&self, subscriber: &tracing::Dispatch) {
-        // Note: This does not work for Layer until https://github.com/tokio-rs/tracing/pull/3379
-        // is merged and released, since `on_register_dispatch` is never called.
-        let mut dispatch = self.dispatch.write().unwrap();
-        *dispatch = Some(subscriber.clone().downgrade());
+    fn on_enter(&self, id: &tracing::span::Id, ctx: Context<'_, S>) {
+        if let Some(weak_dispatch) = self.dispatch.get() {
+            if let Some(span_ref) = ctx.span(id) {
+                let mut extensions = span_ref.extensions_mut();
+                if let Some(dispatch) = weak_dispatch.upgrade() {
+                    if let Some(otel_context) = get_otel_context(&mut extensions, &dispatch) {
+                        let span = otel_context.span();
+                        let span_context = span.span_context();
+                        if span_context.is_valid() {
+                            println!(
+                                "📍 Entering span with trace_id: {:032x}, span_id: {:016x}",
+                                span_context.trace_id(),
+                                span_context.span_id()
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -166,7 +129,7 @@ fn setup_tracing() -> (impl Subscriber, SdkTracerProvider, SpanAnalysisLayer) {
     let tracer = provider.tracer("span_ref_ext_example");
 
     // Create our custom analysis layer
-    let analysis_layer = SpanAnalysisLayer::new();
+    let analysis_layer = SpanAnalysisLayer::default();
 
     // Build the subscriber with multiple layers:
     // 1. OpenTelemetry layer for trace export

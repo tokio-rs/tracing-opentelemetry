@@ -3,10 +3,10 @@ use opentelemetry_sdk::{
     error::OTelSdkResult,
     trace::{SdkTracerProvider, SpanData, SpanExporter, Tracer},
 };
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tracing::Subscriber;
 use tracing::{dispatcher::WeakDispatch, level_filters::LevelFilter, Dispatch};
-use tracing_opentelemetry::{layer, OpenTelemetryContext};
+use tracing_opentelemetry::{get_otel_context, layer};
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::registry::LookupSpan;
@@ -25,24 +25,17 @@ impl SpanExporter for TestExporter {
     }
 }
 
-/// A custom tracing layer that uses OpenTelemetryContext to access OpenTelemetry contexts
+/// A custom tracing layer that uses get_otel_context to access OpenTelemetry contexts
 /// from span extensions. This simulates a separate layer that needs to interact with
 /// OpenTelemetry data managed by the OpenTelemetryLayer.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct CustomLayer {
     /// Store extracted contexts for verification
     extracted_contexts: Arc<Mutex<Vec<opentelemetry::Context>>>,
-    dispatch: Arc<RwLock<Option<WeakDispatch>>>,
+    dispatch: Arc<OnceLock<WeakDispatch>>,
 }
 
 impl CustomLayer {
-    fn new() -> Self {
-        Self {
-            extracted_contexts: Arc::new(Mutex::new(Vec::new())),
-            dispatch: Arc::new(RwLock::new(None)),
-        }
-    }
-
     fn get_extracted_contexts(&self) -> Vec<opentelemetry::Context> {
         self.extracted_contexts.lock().unwrap().clone()
     }
@@ -52,41 +45,26 @@ impl<S> Layer<S> for CustomLayer
 where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
-    fn on_enter(&self, id: &tracing::span::Id, ctx: Context<'_, S>) {
-        let weak_dispatch = {
-            let read_guard = self.dispatch.read().unwrap();
-            match read_guard.as_ref() {
-                Some(weak_dispatch) => weak_dispatch.clone(),
-                None => {
-                    drop(read_guard);
-                    let mut dispatch = self.dispatch.write().unwrap();
-                    let weak_dispatch = Dispatch::default().downgrade();
-                    *dispatch = Some(weak_dispatch.clone());
-                    weak_dispatch
-                }
-            }
-        };
+    fn on_register_dispatch(&self, subscriber: &Dispatch) {
+        let _ = self.dispatch.set(subscriber.downgrade());
+    }
 
-        // Get the span reference from the registry when the span is entered
-        if let Some(span_ref) = ctx.span(id) {
-            // Use OpenTelemetryContext to extract the OpenTelemetry context
-            let mut extensions = span_ref.extensions_mut();
-            let otel_context =
-                OpenTelemetryContext::context(&mut extensions, &weak_dispatch.upgrade());
-            if let Some(otel_context) = otel_context {
-                // Store the extracted context for verification
-                if let Ok(mut contexts) = self.extracted_contexts.lock() {
-                    contexts.push(otel_context);
+    fn on_enter(&self, id: &tracing::span::Id, ctx: Context<'_, S>) {
+        if let Some(weak_dispatch) = self.dispatch.get() {
+            // Get the span reference from the registry when the span is entered
+            if let Some(span_ref) = ctx.span(id) {
+                // Use OpenTelemetryContext to extract the OpenTelemetry context
+                let mut extensions = span_ref.extensions_mut();
+                if let Some(dispatch) = weak_dispatch.upgrade() {
+                    if let Some(otel_context) = get_otel_context(&mut extensions, &dispatch) {
+                        // Store the extracted context for verification
+                        if let Ok(mut contexts) = self.extracted_contexts.lock() {
+                            contexts.push(otel_context);
+                        }
+                    }
                 }
             }
         }
-    }
-
-    fn on_register_dispatch(&self, subscriber: &tracing::Dispatch) {
-        // Note: This does not work for Layer until https://github.com/tokio-rs/tracing/pull/3379
-        // is merged and released, since `on_register_dispatch` is never called.
-        let mut dispatch = self.dispatch.write().unwrap();
-        *dispatch = Some(subscriber.clone().downgrade());
     }
 }
 
@@ -103,7 +81,7 @@ fn test_tracer_with_custom_layer() -> (
         .build();
     let tracer = provider.tracer("test");
 
-    let custom_layer = CustomLayer::new();
+    let custom_layer = CustomLayer::default();
 
     let subscriber = tracing_subscriber::registry()
         .with(

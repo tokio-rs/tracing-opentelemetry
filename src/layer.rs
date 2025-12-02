@@ -121,11 +121,11 @@ pub(crate) struct WithContext {
 
     ///
     /// Ensures the given SpanId has been activated - that is, created in the OTel side of things,
-    /// and had its SpanBuilder consumed - and then provides access to the OtelData associated with it.
+    /// and had its SpanBuilder consumed - and then provides access to the OTel Context associated with it.
     ///
     #[allow(clippy::type_complexity)]
-    pub(crate) with_activated_context_extensions:
-        fn(&tracing::Dispatch, &mut ExtensionsMut<'_>, f: &mut dyn FnMut(&mut OtelData)),
+    pub(crate) with_activated_otel_context:
+        fn(&tracing::Dispatch, &mut ExtensionsMut<'_>, f: &mut dyn FnMut(&OtelContext)),
 }
 
 impl WithContext {
@@ -161,13 +161,13 @@ impl WithContext {
     /// and had its SpanBuilder consumed - and then provides access to the OtelData associated with it.
     ///
     #[allow(clippy::type_complexity)]
-    pub(crate) fn with_activated_context_extensions(
+    pub(crate) fn with_activated_otel_context(
         &self,
         dispatch: &tracing::Dispatch,
         extensions: &mut ExtensionsMut<'_>,
-        mut f: impl FnMut(&mut OtelData),
+        mut f: impl FnMut(&OtelContext),
     ) {
-        (self.with_activated_context_extensions)(dispatch, extensions, &mut f)
+        (self.with_activated_otel_context)(dispatch, extensions, &mut f)
     }
 }
 
@@ -661,7 +661,7 @@ where
             with_context: WithContext {
                 with_context: Self::get_context,
                 with_activated_context: Self::get_activated_context,
-                with_activated_context_extensions: Self::get_activated_context_extensions,
+                with_activated_otel_context: Self::get_activated_otel_context,
             },
             _registry: marker::PhantomData,
         }
@@ -717,8 +717,8 @@ where
             with_context: WithContext {
                 with_context: OpenTelemetryLayer::<S, Tracer>::get_context,
                 with_activated_context: OpenTelemetryLayer::<S, Tracer>::get_activated_context,
-                with_activated_context_extensions:
-                    OpenTelemetryLayer::<S, Tracer>::get_activated_context_extensions,
+                with_activated_otel_context:
+                    OpenTelemetryLayer::<S, Tracer>::get_activated_otel_context,
             },
             _registry: self._registry,
             // cannot use ``..self` here due to different generics
@@ -976,6 +976,18 @@ where
         }
     }
 
+    /// Retrieves the OpenTelemetry data for a span and activates its context before calling
+    /// the provided function.
+    ///
+    /// This function retrieves the span from the subscriber's registry using the provided
+    /// span ID, activates the OTel `Context` in the span's `OtelData` if present, and then
+    /// applies the callback function `f` to the `OtelData`.
+    ///
+    /// # Parameters
+    ///
+    /// * `dispatch` - The tracing dispatch to downcast and retrieve the span from
+    /// * `id` - The span ID to look up in the registry
+    /// * `f` - The closure to invoke with mutable access to the span's `OtelData`
     fn get_activated_context(
         dispatch: &tracing::Dispatch,
         id: &span::Id,
@@ -991,6 +1003,34 @@ where
         let mut extensions = span.extensions_mut();
 
         Self::get_activated_context_extensions(dispatch, &mut extensions, f)
+    }
+
+    /// Retrieves the activated OpenTelemetry context from a span's extensions and passes it
+    /// to the provided function.
+    ///
+    /// This method activates the context and extracts the current OTel `Context` from the
+    /// `OtelData` state if present, and then applies the callback function `f` to a reference
+    /// to the OTel `Context`.
+    ///
+    /// # Parameters
+    ///
+    /// * `dispatch` - The tracing dispatch to downcast to the `OpenTelemetryLayer`
+    /// * `extensions` - Mutable reference to the span's extensions containing `OtelData`
+    /// * `f` - The closure to invoke with a reference to the OTel `Context`
+    fn get_activated_otel_context(
+        dispatch: &tracing::Dispatch,
+        extensions: &mut ExtensionsMut<'_>,
+        f: &mut dyn FnMut(&OtelContext),
+    ) {
+        Self::get_activated_context_extensions(
+            dispatch,
+            extensions,
+            &mut |otel_data: &mut OtelData| {
+                if let OtelDataState::Context { current_cx } = &otel_data.state {
+                    f(current_cx)
+                }
+            },
+        );
     }
 
     fn get_activated_context_extensions(
