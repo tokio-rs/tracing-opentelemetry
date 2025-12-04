@@ -144,6 +144,7 @@ where
                 OtelDataState::Builder {
                     builder,
                     parent_cx: _,
+                    ..
                 } => {
                     builder.attributes.get_or_insert(Vec::new()).push(key_value);
                 }
