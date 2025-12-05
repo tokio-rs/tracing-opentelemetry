@@ -35,6 +35,7 @@ const SPAN_EVENT_COUNT_FIELD: &str = "otel.tracing_event_count";
 const EVENT_EXCEPTION_NAME: &str = "exception";
 const FIELD_EXCEPTION_MESSAGE: &str = "exception.message";
 const FIELD_EXCEPTION_STACKTRACE: &str = "exception.stacktrace";
+const FIELD_EXCEPTION_TYPE: &str = "exception.type";
 
 /// An [OpenTelemetry] propagation layer for use in a project that uses
 /// [tracing].
@@ -287,6 +288,9 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
                     self.event_builder
                         .attributes
                         .push(KeyValue::new(FIELD_EXCEPTION_MESSAGE, format!("{value:?}")));
+                    self.event_builder
+                        .attributes
+                        .push(KeyValue::new(FIELD_EXCEPTION_TYPE, "&str"));
                 } else {
                     self.event_builder
                         .attributes
@@ -326,6 +330,9 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
                     self.event_builder
                         .attributes
                         .push(KeyValue::new(FIELD_EXCEPTION_MESSAGE, format!("{value:?}")));
+                    self.event_builder
+                        .attributes
+                        .push(KeyValue::new(FIELD_EXCEPTION_TYPE, "&dyn fmt::Debug"));
                 } else {
                     self.event_builder
                         .attributes
@@ -367,6 +374,10 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
                 Key::new(FIELD_EXCEPTION_MESSAGE),
                 Value::String(StringValue::from(error_msg.clone())),
             ));
+            self.event_builder.attributes.push(KeyValue::new(
+                Key::new(FIELD_EXCEPTION_TYPE),
+                "&dyn std::error::Error",
+            ));
 
             // NOTE: This is actually not the stacktrace of the exception. This is
             // the "source chain". It represents the heirarchy of errors from the
@@ -390,6 +401,10 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
             attributes.push(KeyValue::new(
                 FIELD_EXCEPTION_MESSAGE,
                 Value::String(error_msg.clone().into()),
+            ));
+            attributes.push(KeyValue::new(
+                FIELD_EXCEPTION_TYPE,
+                "&dyn std::error::Error",
             ));
 
             // NOTE: This is actually not the stacktrace of the exception. This is
@@ -547,6 +562,10 @@ impl field::Visit for SpanAttributeVisitor<'_> {
             self.record(KeyValue::new(
                 Key::new(FIELD_EXCEPTION_MESSAGE),
                 Value::from(error_msg.clone()),
+            ));
+            self.record(KeyValue::new(
+                Key::new(FIELD_EXCEPTION_TYPE),
+                "&dyn std::error::Error",
             ));
 
             // NOTE: This is actually not the stacktrace of the exception. This is
@@ -1738,6 +1757,10 @@ mod tests {
 
         assert_eq!(attributes[FIELD_EXCEPTION_MESSAGE].as_str(), "user error");
         assert_eq!(
+            attributes[FIELD_EXCEPTION_TYPE].as_str(),
+            "&dyn std::error::Error"
+        );
+        assert_eq!(
             attributes[FIELD_EXCEPTION_STACKTRACE],
             Value::Array(
                 vec![
@@ -1881,6 +1904,10 @@ mod tests {
         );
 
         assert_eq!(attributes[FIELD_EXCEPTION_MESSAGE].as_str(), "user error");
+        assert_eq!(
+            attributes[FIELD_EXCEPTION_TYPE].as_str(),
+            "&dyn std::error::Error"
+        );
         assert_eq!(
             attributes[FIELD_EXCEPTION_STACKTRACE],
             Value::Array(
@@ -2138,6 +2165,10 @@ mod tests {
 
         assert_eq!(attributes[FIELD_EXCEPTION_MESSAGE].as_str(), "user error");
         assert_eq!(
+            attributes[FIELD_EXCEPTION_TYPE].as_str(),
+            "&dyn std::error::Error"
+        );
+        assert_eq!(
             attributes[FIELD_EXCEPTION_STACKTRACE],
             Value::Array(
                 vec![
@@ -2184,6 +2215,10 @@ mod tests {
         let attributes = tracer.attributes();
 
         assert_eq!(attributes[FIELD_EXCEPTION_MESSAGE].as_str(), "user error");
+        assert_eq!(
+            attributes[FIELD_EXCEPTION_TYPE].as_str(),
+            "&dyn std::error::Error"
+        );
         assert_eq!(
             attributes[FIELD_EXCEPTION_STACKTRACE],
             Value::Array(
