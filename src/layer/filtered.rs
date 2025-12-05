@@ -144,8 +144,10 @@ where
                 OtelDataState::Builder {
                     builder,
                     parent_cx: _,
+                    status,
                 } => {
                     builder.attributes.get_or_insert(Vec::new()).push(key_value);
+                    builder.status = status.clone();
                 }
                 OtelDataState::Context { current_cx } => {
                     let span = current_cx.span();
