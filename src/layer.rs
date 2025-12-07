@@ -290,7 +290,7 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
                         .push(KeyValue::new(FIELD_EXCEPTION_MESSAGE, format!("{value:?}")));
                     self.event_builder
                         .attributes
-                        .push(KeyValue::new(FIELD_EXCEPTION_TYPE, "&str"));
+                        .push(KeyValue::new(FIELD_EXCEPTION_TYPE, "Unknown"));
                 } else {
                     self.event_builder
                         .attributes
@@ -332,7 +332,7 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
                         .push(KeyValue::new(FIELD_EXCEPTION_MESSAGE, format!("{value:?}")));
                     self.event_builder
                         .attributes
-                        .push(KeyValue::new(FIELD_EXCEPTION_TYPE, "&dyn fmt::Debug"));
+                        .push(KeyValue::new(FIELD_EXCEPTION_TYPE, "Unknown"));
                 } else {
                     self.event_builder
                         .attributes
@@ -374,10 +374,9 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
                 Key::new(FIELD_EXCEPTION_MESSAGE),
                 Value::String(StringValue::from(error_msg.clone())),
             ));
-            self.event_builder.attributes.push(KeyValue::new(
-                Key::new(FIELD_EXCEPTION_TYPE),
-                "&dyn std::error::Error",
-            ));
+            self.event_builder
+                .attributes
+                .push(KeyValue::new(Key::new(FIELD_EXCEPTION_TYPE), "Unkonwn"));
 
             // NOTE: This is actually not the stacktrace of the exception. This is
             // the "source chain". It represents the heirarchy of errors from the
@@ -402,10 +401,7 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
                 FIELD_EXCEPTION_MESSAGE,
                 Value::String(error_msg.clone().into()),
             ));
-            attributes.push(KeyValue::new(
-                FIELD_EXCEPTION_TYPE,
-                "&dyn std::error::Error",
-            ));
+            attributes.push(KeyValue::new(FIELD_EXCEPTION_TYPE, "Unknown"));
 
             // NOTE: This is actually not the stacktrace of the exception. This is
             // the "source chain". It represents the heirarchy of errors from the
@@ -563,10 +559,7 @@ impl field::Visit for SpanAttributeVisitor<'_> {
                 Key::new(FIELD_EXCEPTION_MESSAGE),
                 Value::from(error_msg.clone()),
             ));
-            self.record(KeyValue::new(
-                Key::new(FIELD_EXCEPTION_TYPE),
-                "&dyn std::error::Error",
-            ));
+            self.record(KeyValue::new(Key::new(FIELD_EXCEPTION_TYPE), "Unknown"));
 
             // NOTE: This is actually not the stacktrace of the exception. This is
             // the "source chain". It represents the heirarchy of errors from the
@@ -1756,10 +1749,7 @@ mod tests {
         );
 
         assert_eq!(attributes[FIELD_EXCEPTION_MESSAGE].as_str(), "user error");
-        assert_eq!(
-            attributes[FIELD_EXCEPTION_TYPE].as_str(),
-            "&dyn std::error::Error"
-        );
+        assert_eq!(attributes[FIELD_EXCEPTION_TYPE].as_str(), "Unknown");
         assert_eq!(
             attributes[FIELD_EXCEPTION_STACKTRACE],
             Value::Array(
@@ -1904,10 +1894,7 @@ mod tests {
         );
 
         assert_eq!(attributes[FIELD_EXCEPTION_MESSAGE].as_str(), "user error");
-        assert_eq!(
-            attributes[FIELD_EXCEPTION_TYPE].as_str(),
-            "&dyn std::error::Error"
-        );
+        assert_eq!(attributes[FIELD_EXCEPTION_TYPE].as_str(), "Unknown");
         assert_eq!(
             attributes[FIELD_EXCEPTION_STACKTRACE],
             Value::Array(
@@ -2164,10 +2151,7 @@ mod tests {
         let attributes = tracer.attributes();
 
         assert_eq!(attributes[FIELD_EXCEPTION_MESSAGE].as_str(), "user error");
-        assert_eq!(
-            attributes[FIELD_EXCEPTION_TYPE].as_str(),
-            "&dyn std::error::Error"
-        );
+        assert_eq!(attributes[FIELD_EXCEPTION_TYPE].as_str(), "Unknown");
         assert_eq!(
             attributes[FIELD_EXCEPTION_STACKTRACE],
             Value::Array(
@@ -2215,10 +2199,7 @@ mod tests {
         let attributes = tracer.attributes();
 
         assert_eq!(attributes[FIELD_EXCEPTION_MESSAGE].as_str(), "user error");
-        assert_eq!(
-            attributes[FIELD_EXCEPTION_TYPE].as_str(),
-            "&dyn std::error::Error"
-        );
+        assert_eq!(attributes[FIELD_EXCEPTION_TYPE].as_str(), "Unknown");
         assert_eq!(
             attributes[FIELD_EXCEPTION_STACKTRACE],
             Value::Array(
