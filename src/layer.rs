@@ -65,6 +65,15 @@ where
 
 /// Construct a layer to track spans via [OpenTelemetry].
 ///
+/// It will convert the tracing spans to OpenTelemetry spans
+/// and tracing events which are in a span to events in the currently active OpenTelemetry span.
+/// Child-Parent links will be automatically translated as well.
+/// Follows-From links will also be generated, but only if the originating span has not been closed yet.
+///
+/// Various translations exist between semantic conventions of OpenTelemetry and `tracing`,
+/// such as including level information as fields, or mapping error fields to exceptions.
+/// See the various `layer().with_*` functions for configuration of these features.
+///
 /// [OpenTelemetry]: https://opentelemetry.io
 ///
 /// # Examples
