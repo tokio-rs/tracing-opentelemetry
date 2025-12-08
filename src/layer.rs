@@ -1197,18 +1197,18 @@ where
     fn on_follows_from(&self, id: &Id, follows: &Id, ctx: Context<S>) {
         let span = ctx.span(id).expect("Span not found, this is a bug");
         let mut extensions = span.extensions_mut();
-        let data = extensions
-            .get_mut::<OtelData>()
-            .expect("Missing otel data span extensions");
+        let Some(data) = extensions.get_mut::<OtelData>() else {
+            return; // The span must already have been closed by us
+        };
 
         // The follows span may be filtered away (or closed), from this layer,
         // in which case we just drop the data, as opposed to panicking. This
         // uses the same reasoning as `parent_context` above.
         if let Some(follows_span) = ctx.span(follows) {
             let mut follows_extensions = follows_span.extensions_mut();
-            let follows_data = follows_extensions
-                .get_mut::<OtelData>()
-                .expect("Missing otel data span extensions");
+            let Some(follows_data) = follows_extensions.get_mut::<OtelData>() else {
+                return; // The span must already have been closed by us
+            };
             let follows_context =
                 self.with_started_cx(follows_data, &|cx| cx.span().span_context().clone());
             match &mut data.state {
