@@ -115,6 +115,8 @@ mod metrics;
 
 /// Implementation of the trace::Layer as a source of OpenTelemetry data.
 mod layer;
+/// Function which enables OpenTelemetry context extraction from span extensions.
+mod otel_context;
 /// Span extension which enables OpenTelemetry context management.
 mod span_ext;
 
@@ -127,6 +129,7 @@ pub use layer::{layer, FilteredOpenTelemetryLayer, OpenTelemetryLayer};
 #[cfg(feature = "metrics")]
 pub use metrics::MetricsLayer;
 use opentelemetry::trace::TraceContextExt as _;
+pub use otel_context::get_otel_context;
 pub use span_ext::{OpenTelemetrySpanExt, SetParentError};
 
 /// Per-span OpenTelemetry data tracked by this crate.
