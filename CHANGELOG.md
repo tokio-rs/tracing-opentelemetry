@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.1](https://github.com/tokio-rs/tracing-opentelemetry/compare/v0.32.0...v0.32.1) - 2025-12-17
+
+### Added
+
+- allow OpenTelemetry context access with SpanRef ([#234](https://github.com/tokio-rs/tracing-opentelemetry/pull/234))
+- add event-counting filtering layer for spans ([#228](https://github.com/tokio-rs/tracing-opentelemetry/pull/228))
+- publicly export `SetParentError`
+
+### Fixed
+
+- fix panic in multithreaded follows-from
+
+### Other
+
+- Remove unwanted dependency on opentelemetry sdk crate ([#241](https://github.com/tokio-rs/tracing-opentelemetry/pull/241))
+- update README.md links to use the latest version ([#239](https://github.com/tokio-rs/tracing-opentelemetry/pull/239))
+- remove thiserror and unused dependencies ([#238](https://github.com/tokio-rs/tracing-opentelemetry/pull/238))
+
 ## [0.32.0](https://github.com/tokio-rs/tracing-opentelemetry/compare/v0.31.0...v0.32.0) - 2025-09-29
 
 ### Added
