@@ -14,6 +14,7 @@ keywords = ["tracing", "opentelemetry", "jaeger", "zipkin", "async"]
 license = "MIT"
 edition = "2021"
 rust-version = "1.75.0"
+include = ["src/**/*.rs", "tests/**/*.rs", "CHANGELOG.md", "README.md", "Cargo.toml", "LICENSE"]
 
 [features]
 default = ["tracing-log", "metrics"]
