@@ -76,7 +76,7 @@ $ cargo run --example opentelemetry-otlp
 $ firefox http://localhost:16686/
 ```
 
-![Jaeger UI](trace.png)
+![Jaeger UI](https://raw.githubusercontent.com/tokio-rs/tracing-opentelemetry/refs/heads/v0.1.x/trace.png)
 
 ## Feature Flags
 
