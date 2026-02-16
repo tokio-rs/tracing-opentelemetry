@@ -1,12 +1,13 @@
 use crate::stack::IdValueStack;
-use crate::{OtelData, OtelDataState};
+use crate::{OtelData, OtelDataLock, OtelDataState};
 pub use filtered::FilteredOpenTelemetryLayer;
 use opentelemetry::ContextGuard;
 use opentelemetry::{
     trace::{self as otel, noop, Span, SpanBuilder, SpanKind, Status, TraceContextExt},
     Context as OtelContext, Key, KeyValue, StringValue, Value,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::sync::Arc;
 use std::thread;
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "wasi"))))]
 use std::time::Instant;
@@ -19,7 +20,7 @@ use tracing_core::{field, Event, Subscriber};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::layer::Filter;
-use tracing_subscriber::registry::{ExtensionsMut, LookupSpan};
+use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::Layer;
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 use web_time::Instant;
@@ -35,6 +36,10 @@ const SPAN_EVENT_COUNT_FIELD: &str = "otel.tracing_event_count";
 const EVENT_EXCEPTION_NAME: &str = "exception";
 const FIELD_EXCEPTION_MESSAGE: &str = "exception.message";
 const FIELD_EXCEPTION_STACKTRACE: &str = "exception.stacktrace";
+
+std::thread_local! {
+    static INSIDE_TRACING: Cell<bool> = const { Cell::new(false) };
+}
 
 /// An [OpenTelemetry] propagation layer for use in a project that uses
 /// [tracing].
@@ -125,7 +130,7 @@ pub(crate) struct WithContext {
     ///
     #[allow(clippy::type_complexity)]
     pub(crate) with_activated_otel_context:
-        fn(&tracing::Dispatch, &mut ExtensionsMut<'_>, f: &mut dyn FnMut(&OtelContext)),
+        fn(&tracing::Dispatch, &span::Id, f: &mut dyn FnMut(&OtelContext)),
 }
 
 impl WithContext {
@@ -164,10 +169,10 @@ impl WithContext {
     pub(crate) fn with_activated_otel_context(
         &self,
         dispatch: &tracing::Dispatch,
-        extensions: &mut ExtensionsMut<'_>,
+        id: &span::Id,
         mut f: impl FnMut(&OtelContext),
     ) {
-        (self.with_activated_otel_context)(dispatch, extensions, &mut f)
+        (self.with_activated_otel_context)(dispatch, id, &mut f)
     }
 }
 
@@ -919,11 +924,11 @@ where
             //
             // In these case, we prefer to emit a smaller span tree instead of panicking.
             if let Some(span) = ctx.span(parent) {
-                let mut extensions = span.extensions_mut();
-                if let Some(otel_data) = extensions.get_mut::<OtelData>() {
+                let extensions = span.extensions();
+                if let Some(otel_data) = extensions.get::<OtelDataLock>() {
                     // If the parent span has a span builder the parent span should be started
                     // so we get a proper context with the parent span.
-                    return self.with_started_cx(otel_data, &|cx| cx.clone());
+                    return self.with_started_cx(&mut otel_data.lock(), &|cx| cx.clone());
                 }
             }
         }
@@ -938,10 +943,10 @@ where
                 // we should use the current tracing context
                 ctx.lookup_current()
                     .and_then(|span| {
-                        let mut extensions = span.extensions_mut();
+                        let extensions = span.extensions();
                         extensions
-                            .get_mut::<OtelData>()
-                            .map(|data| self.with_started_cx(data, &|cx| cx.clone()))
+                            .get::<OtelDataLock>()
+                            .map(|data| self.with_started_cx(&mut data.lock(), &|cx| cx.clone()))
                     })
                     .unwrap_or_else(OtelContext::current)
             }
@@ -970,9 +975,9 @@ where
             .span(id)
             .expect("registry should have a span for the current ID");
 
-        let mut extensions = span.extensions_mut();
-        if let Some(otel_data) = extensions.get_mut::<OtelData>() {
-            f(otel_data);
+        let otel_data = span.extensions().get::<OtelDataLock>().cloned();
+        if let Some(otel_data) = otel_data {
+            f(&mut otel_data.lock());
         }
     }
 
@@ -993,19 +998,29 @@ where
         id: &span::Id,
         f: &mut dyn FnMut(&mut OtelData),
     ) {
+        let layer = dispatch
+            .downcast_ref::<OpenTelemetryLayer<S, T>>()
+            .expect("layer should downcast to expected type; this is a bug!");
+
         let subscriber = dispatch
             .downcast_ref::<S>()
             .expect("subscriber should downcast to expected type; this is a bug!");
+
         let span = subscriber
             .span(id)
             .expect("registry should have a span for the current ID");
 
-        let mut extensions = span.extensions_mut();
+        let otel_data = span.extensions().get::<OtelDataLock>().cloned();
 
-        Self::get_activated_context_extensions(dispatch, &mut extensions, f)
+        if let Some(otel_data) = otel_data {
+            let mut otel_data = otel_data.lock();
+            // Activate the context
+            layer.start_cx(&mut otel_data);
+            f(&mut otel_data);
+        }
     }
 
-    /// Retrieves the activated OpenTelemetry context from a span's extensions and passes it
+    /// Retrieves the activated OpenTelemetry context from a span's ID and passes it
     /// to the provided function.
     ///
     /// This method activates the context and extracts the current OTel `Context` from the
@@ -1015,38 +1030,18 @@ where
     /// # Parameters
     ///
     /// * `dispatch` - The tracing dispatch to downcast to the `OpenTelemetryLayer`
-    /// * `extensions` - Mutable reference to the span's extensions containing `OtelData`
+    /// * `id` - The span ID to look up in the registry
     /// * `f` - The closure to invoke with a reference to the OTel `Context`
     fn get_activated_otel_context(
         dispatch: &tracing::Dispatch,
-        extensions: &mut ExtensionsMut<'_>,
+        span: &span::Id,
         f: &mut dyn FnMut(&OtelContext),
     ) {
-        Self::get_activated_context_extensions(
-            dispatch,
-            extensions,
-            &mut |otel_data: &mut OtelData| {
-                if let OtelDataState::Context { current_cx } = &otel_data.state {
-                    f(current_cx)
-                }
-            },
-        );
-    }
-
-    fn get_activated_context_extensions(
-        dispatch: &tracing::Dispatch,
-        extensions: &mut ExtensionsMut<'_>,
-        f: &mut dyn FnMut(&mut OtelData),
-    ) {
-        let layer = dispatch
-            .downcast_ref::<OpenTelemetryLayer<S, T>>()
-            .expect("layer should downcast to expected type; this is a bug!");
-
-        if let Some(otel_data) = extensions.get_mut::<OtelData>() {
-            // Activate the context
-            layer.start_cx(otel_data);
-            f(otel_data);
-        }
+        Self::get_activated_context(dispatch, span, &mut |otel_data: &mut OtelData| {
+            if let OtelDataState::Context { current_cx } = &otel_data.state {
+                f(current_cx)
+            }
+        });
     }
 
     fn extra_span_attrs(&self) -> usize {
@@ -1079,9 +1074,16 @@ where
             status,
         } = take(&mut otel_data.state)
         {
+            // We purposefully disable all tracing inside this call. Whoever called this is holding
+            // a lock on `OtelData` and this is not reentrant.
+            INSIDE_TRACING.with(|inside| inside.set(true));
+            #[cfg(all(test, __reentrant_tracing_test))]
+            tracing::info!("This should not deadlock...");
             let mut span = builder.start_with_context(&self.tracer, &parent_cx);
             span.set_status(status);
             let current_cx = parent_cx.with_span(span);
+            INSIDE_TRACING.with(|inside| inside.set(false));
+
             otel_data.state = OtelDataState::Context { current_cx };
         }
     }
@@ -1089,7 +1091,14 @@ where
     fn with_started_cx<U>(&self, otel_data: &mut OtelData, f: &dyn Fn(&OtelContext) -> U) -> U {
         self.start_cx(otel_data);
         match &otel_data.state {
-            OtelDataState::Context { current_cx, .. } => f(current_cx),
+            OtelDataState::Context { current_cx, .. } => {
+                INSIDE_TRACING.with(|inside| inside.set(true));
+                #[cfg(all(test, __reentrant_tracing_test))]
+                tracing::info!("This should not deadlock...");
+                let result = f(current_cx);
+                INSIDE_TRACING.with(|inside| inside.set(false));
+                result
+            }
             _ => panic!("OtelDataState should be a Context after starting it; this is a bug!"),
         }
     }
@@ -1184,14 +1193,14 @@ where
 
         let mut status = Status::Unset;
         updates.update(&mut builder, &mut status);
-        extensions.insert(OtelData {
+        extensions.insert(OtelDataLock::new(OtelData {
             state: OtelDataState::Builder {
                 builder,
                 parent_cx,
                 status,
             },
             end_time: None,
-        });
+        }));
     }
 
     fn on_enter(&self, id: &span::Id, ctx: Context<'_, S>) {
@@ -1200,11 +1209,13 @@ where
         }
 
         let span = ctx.span(id).expect("Span not found, this is a bug");
-        let mut extensions = span.extensions_mut();
 
         if self.context_activation {
-            if let Some(otel_data) = extensions.get_mut::<OtelData>() {
-                self.with_started_cx(otel_data, &|cx| {
+            // We must not hold the extensions when starting the context to avoid potential
+            // deadlocks.
+            let otel_data = span.extensions().get::<OtelDataLock>().cloned();
+            if let Some(otel_data) = otel_data {
+                self.with_started_cx(&mut otel_data.lock(), &|cx| {
                     let guard = cx.clone().attach();
                     GUARD_STACK.with(|stack| stack.borrow_mut().push(id.clone(), guard));
                 });
@@ -1214,6 +1225,8 @@ where
                 return;
             }
         }
+
+        let mut extensions = span.extensions_mut();
 
         if let Some(timings) = extensions.get_mut::<Timings>() {
             if timings.entered_count == 0 {
@@ -1229,8 +1242,11 @@ where
         let span = ctx.span(id).expect("Span not found, this is a bug");
         let mut extensions = span.extensions_mut();
 
-        if let Some(otel_data) = extensions.get_mut::<OtelData>() {
-            otel_data.end_time = Some(crate::time::now());
+        // We don't need mutable access to this but we're taking mutable extensions for timings
+        // anyway so let's use it instead of locking it twice. This is ok because here we will not
+        // start the opentelemetry context nor will we call any other code that might use tracing.
+        if let Some(otel_data) = extensions.get_mut::<OtelDataLock>() {
+            otel_data.lock().end_time = Some(crate::time::now());
             if self.context_activation {
                 GUARD_STACK.with(|stack| stack.borrow_mut().pop(id));
             }
@@ -1260,9 +1276,9 @@ where
             span_builder_updates: &mut updates,
             sem_conv_config: self.sem_conv_config,
         });
-        let mut extensions = span.extensions_mut();
-        if let Some(otel_data) = extensions.get_mut::<OtelData>() {
-            match &mut otel_data.state {
+        let extensions = span.extensions();
+        if let Some(otel_data) = extensions.get::<OtelDataLock>() {
+            match &mut otel_data.lock().state {
                 OtelDataState::Builder {
                     builder, status, ..
                 } => {
@@ -1279,8 +1295,8 @@ where
 
     fn on_follows_from(&self, id: &Id, follows: &Id, ctx: Context<S>) {
         let span = ctx.span(id).expect("Span not found, this is a bug");
-        let mut extensions = span.extensions_mut();
-        let Some(data) = extensions.get_mut::<OtelData>() else {
+        let otel_data = span.extensions().get::<OtelDataLock>().cloned();
+        let Some(data) = otel_data else {
             return; // The span must already have been closed by us
         };
 
@@ -1288,13 +1304,22 @@ where
         // in which case we just drop the data, as opposed to panicking. This
         // uses the same reasoning as `parent_context` above.
         if let Some(follows_span) = ctx.span(follows) {
-            let mut follows_extensions = follows_span.extensions_mut();
-            let Some(follows_data) = follows_extensions.get_mut::<OtelData>() else {
+            let follows_extensions = follows_span.extensions();
+            let follows_otel_data = follows_extensions.get::<OtelDataLock>();
+            let Some(follows_data) = follows_otel_data else {
                 return; // The span must already have been closed by us
             };
+
+            let follows_data = follows_data.clone();
+            let mut follows_locked = follows_data.lock();
+            // We drop the extensions lock only after locking the inside. This is because we want to
+            // hinder potential `close` on the follows span. If we hold one or the other lock, the
+            // close implementation cannot progress to remove the span.
+            drop(follows_extensions);
+
             let follows_context =
-                self.with_started_cx(follows_data, &|cx| cx.span().span_context().clone());
-            match &mut data.state {
+                self.with_started_cx(&mut follows_locked, &|cx| cx.span().span_context().clone());
+            match &mut data.lock().state {
                 OtelDataState::Builder { builder, .. } => {
                     if let Some(ref mut links) = builder.links {
                         links.push(otel::Link::with_context(follows_context));
@@ -1318,6 +1343,10 @@ where
     /// [`ERROR`]: tracing::Level::ERROR
     /// [`Error`]: opentelemetry::trace::StatusCode::Error
     fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
+        if INSIDE_TRACING.with(|inside| inside.get()) {
+            // Ignore reentrant calls.
+            return;
+        }
         // Ignore events that are not in the context of a span
         if let Some(span) = event.parent().and_then(|id| ctx.span(id)).or_else(|| {
             event
@@ -1375,9 +1404,9 @@ where
                 otel_event.name = std::borrow::Cow::Borrowed(event.metadata().name());
             }
 
-            let mut extensions = span.extensions_mut();
+            let otel_data = span.extensions().get::<OtelDataLock>().cloned();
 
-            if let Some(otel_data) = extensions.get_mut::<OtelData>() {
+            if let Some(otel_data) = otel_data {
                 if self.location {
                     #[cfg(not(feature = "tracing-log"))]
                     let normalized_meta: Option<tracing_core::Metadata<'_>> = None;
@@ -1409,7 +1438,7 @@ where
                     }
                 }
 
-                match &mut otel_data.state {
+                match &mut otel_data.lock().state {
                     OtelDataState::Builder {
                         builder, status, ..
                     } => {
@@ -1449,17 +1478,36 @@ where
     fn on_close(&self, id: span::Id, ctx: Context<'_, S>) {
         let span = ctx.span(&id).expect("Span not found, this is a bug");
         // Now get mutable extensions for removal
-        let (otel_data, timings) = {
+        let (otel_data_lock, timings) = {
             let mut extensions = span.extensions_mut();
             let timings = if self.tracked_inactivity {
                 extensions.remove::<Timings>()
             } else {
                 None
             };
-            (extensions.remove::<OtelData>(), timings)
+            (extensions.remove::<OtelDataLock>(), timings)
         };
 
-        if let Some(OtelData { state, end_time }) = otel_data {
+        if let Some(otel_data_lock) = otel_data_lock {
+            // If we cannot lock this, someone else is still doing some operations on this span.
+            // Wait until they're finished.
+            drop(otel_data_lock.lock());
+            debug_assert!(
+                Arc::strong_count(&otel_data_lock.inner) == 1,
+                "OtelDataLock should not be held by anything else when closing spans. This is a bug in `tracing-opentelemetry`, please file a bug report. This will be ignored when compiled with --release."
+            );
+            // We don't use Weak anywhere but this is a sanity check that no one else can ever get a
+            // hold on the `Arc` again. If we checked just the strong count and someone still had a
+            // `Weak`, they could upgrade at any time.
+            debug_assert!(
+                Arc::weak_count(&otel_data_lock.inner) == 0,
+                "OtelDataLock should never be made into `Weak`. This is a bug in `tracing-opentelemetry`, please file a bug report. This will be ignored when compiled with --release."
+            );
+
+            let otel_data = Arc::try_unwrap(otel_data_lock.inner)
+                .map(|lock| lock.into_inner().unwrap())
+                .unwrap_or_else(|otel_data| otel_data.lock().unwrap().clone());
+
             // Append busy/idle timings when enabled.
             let timings = timings.map(|timings| {
                 let busy_ns = Key::new("busy_ns");
@@ -1471,19 +1519,21 @@ where
                 ]
             });
 
-            match state {
+            match otel_data.state {
                 OtelDataState::Builder {
                     builder,
                     parent_cx,
                     status,
                 } => {
-                    // Don't create the context here just to get a SpanRef since it's costly
+                    // We're not holding the extensions lock here so it's fine to just call to
+                    // opentelemetry and let it log whatever it wants. If we had a lock, we'd have
+                    // to set the default `Dispatch` to none to prevent deadlocks.
                     let mut span = builder.start_with_context(&self.tracer, &parent_cx);
                     if let Some(timings) = timings {
                         span.set_attributes(timings)
                     };
-                    span.set_status(status);
-                    if let Some(end_time) = end_time {
+                    span.set_status(status.clone());
+                    if let Some(end_time) = otel_data.end_time {
                         span.end_with_timestamp(end_time);
                     } else {
                         span.end();
@@ -1494,7 +1544,8 @@ where
                     if let Some(timings) = timings {
                         span.set_attributes(timings)
                     };
-                    end_time
+                    otel_data
+                        .end_time
                         .map_or_else(|| span.end(), |end_time| span.end_with_timestamp(end_time));
                 }
             }
@@ -1872,6 +1923,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(__reentrant_tracing_test))] // The counts would be wrong
     fn event_filter_count() {
         let mut tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(
@@ -2353,7 +2405,7 @@ mod tests {
             let _enter_child = child.enter();
             assert_eq!(OtelContext::current().get(), Some(&ValueA("outer")));
             assert_eq!(OtelContext::current().get(), Some(&ValueB("inner")));
-            // Create an OpenTelemetry span using the OpentTelemetry notion of current
+            // Create an OpenTelemetry span using the OpenTelemetry notion of current
             // span to see check that it is a child of the tokio child span
             let span = tracer
                 .tracer

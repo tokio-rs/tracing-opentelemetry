@@ -75,45 +75,38 @@ where
         &self,
         attrs: &tracing::span::Attributes<'_>,
         id: &tracing::span::Id,
-        ctx: Context<'_, S>,
+        _ctx: Context<'_, S>,
     ) {
         let Some(weak_dispatch) = self.dispatch.get() else {
             return;
         };
 
-        // Get the span reference and extract OpenTelemetry context
-        if let Some(span_ref) = ctx.span(id) {
-            // This is the key functionality: using OpenTelemetryContext
-            // to extract the OpenTelemetry context from span extensions
-            let mut extensions = span_ref.extensions_mut();
-            if let Some(dispatch) = weak_dispatch.upgrade() {
-                if let Some(otel_context) = get_otel_context(&mut extensions, &dispatch) {
-                    self.analyze_span_context(attrs.metadata().name(), &otel_context);
-                } else {
-                    println!(
-                        "⚠️  Could not extract OpenTelemetry context for span '{}'",
-                        attrs.metadata().name()
-                    );
-                }
+        // This is the key functionality: using OpenTelemetryContext
+        // to extract the OpenTelemetry context from span extensions
+        if let Some(dispatch) = weak_dispatch.upgrade() {
+            if let Some(otel_context) = get_otel_context(id, &dispatch) {
+                self.analyze_span_context(attrs.metadata().name(), &otel_context);
+            } else {
+                println!(
+                    "⚠️  Could not extract OpenTelemetry context for span '{}'",
+                    attrs.metadata().name()
+                );
             }
         }
     }
 
-    fn on_enter(&self, id: &tracing::span::Id, ctx: Context<'_, S>) {
+    fn on_enter(&self, id: &tracing::span::Id, _ctx: Context<'_, S>) {
         if let Some(weak_dispatch) = self.dispatch.get() {
-            if let Some(span_ref) = ctx.span(id) {
-                let mut extensions = span_ref.extensions_mut();
-                if let Some(dispatch) = weak_dispatch.upgrade() {
-                    if let Some(otel_context) = get_otel_context(&mut extensions, &dispatch) {
-                        let span = otel_context.span();
-                        let span_context = span.span_context();
-                        if span_context.is_valid() {
-                            println!(
-                                "📍 Entering span with trace_id: {:032x}, span_id: {:016x}",
-                                span_context.trace_id(),
-                                span_context.span_id()
-                            );
-                        }
+            if let Some(dispatch) = weak_dispatch.upgrade() {
+                if let Some(otel_context) = get_otel_context(id, &dispatch) {
+                    let span = otel_context.span();
+                    let span_context = span.span_context();
+                    if span_context.is_valid() {
+                        println!(
+                            "📍 Entering span with trace_id: {:032x}, span_id: {:016x}",
+                            span_context.trace_id(),
+                            span_context.span_id()
+                        );
                     }
                 }
             }

@@ -49,18 +49,14 @@ where
         let _ = self.dispatch.set(subscriber.downgrade());
     }
 
-    fn on_enter(&self, id: &tracing::span::Id, ctx: Context<'_, S>) {
+    fn on_enter(&self, id: &tracing::span::Id, _ctx: Context<'_, S>) {
         if let Some(weak_dispatch) = self.dispatch.get() {
-            // Get the span reference from the registry when the span is entered
-            if let Some(span_ref) = ctx.span(id) {
-                // Use OpenTelemetryContext to extract the OpenTelemetry context
-                let mut extensions = span_ref.extensions_mut();
-                if let Some(dispatch) = weak_dispatch.upgrade() {
-                    if let Some(otel_context) = get_otel_context(&mut extensions, &dispatch) {
-                        // Store the extracted context for verification
-                        if let Ok(mut contexts) = self.extracted_contexts.lock() {
-                            contexts.push(otel_context);
-                        }
+            // Use OpenTelemetryContext to extract the OpenTelemetry context
+            if let Some(dispatch) = weak_dispatch.upgrade() {
+                if let Some(otel_context) = get_otel_context(id, &dispatch) {
+                    // Store the extracted context for verification
+                    if let Ok(mut contexts) = self.extracted_contexts.lock() {
+                        contexts.push(otel_context);
                     }
                 }
             }

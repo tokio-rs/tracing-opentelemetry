@@ -1,15 +1,16 @@
 use crate::layer::WithContext;
-use tracing::Dispatch;
-use tracing_subscriber::registry::ExtensionsMut;
+use tracing::{span, Dispatch};
 
-/// Utility functions to allow tracing [`ExtensionsMut`]s to return
-/// [OpenTelemetry] [`Context`]s.
+/// Utility functions to allow [`tracing::span::Id`]s to return [OpenTelemetry] [`Context`]s. Note
+/// that this will internally try to lock [`Extensions`] so the caller must not be holding
+/// [`ExtensionsMut`] when calling this, otherwise the method may deadlock.
 ///
+/// [`Extensions`]: tracing_subscriber::registry::Extensions
 /// [`ExtensionsMut`]: tracing_subscriber::registry::ExtensionsMut
 /// [OpenTelemetry]: https://opentelemetry.io
 /// [`Context`]: opentelemetry::Context
 ///
-/// Extracts the OpenTelemetry [`Context`] associated with this span extensions.
+/// Extracts the OpenTelemetry [`Context`] associated with this span.
 ///
 /// This method retrieves the OpenTelemetry context data that has been stored
 /// for the span by the OpenTelemetry layer. The context includes the span's
@@ -33,7 +34,8 @@ use tracing_subscriber::registry::ExtensionsMut;
 ///     D: LookupSpan<'a>,
 /// {
 ///     if let Some(dispatch) = weak_dispatch.upgrade() {
-///         if let Some(otel_context) = get_otel_context(&mut span_ref.extensions_mut(), &dispatch) {
+///         // Be sure *NOT* to hold `ExtensionsMut` when calling this.
+///         if let Some(otel_context) = get_otel_context(&span_ref.id(), &dispatch) {
 ///             // Process the extracted context
 ///             let span = otel_context.span();
 ///             let span_context = span.span_context();
@@ -49,16 +51,13 @@ use tracing_subscriber::registry::ExtensionsMut;
 ///
 /// - When working with multiple subscriber configurations
 /// - When implementing advanced tracing middleware that manages multiple dispatches
-pub fn get_otel_context(
-    extensions: &mut ExtensionsMut<'_>,
-    dispatch: &Dispatch,
-) -> Option<opentelemetry::Context> {
+pub fn get_otel_context(span_id: &span::Id, dispatch: &Dispatch) -> Option<opentelemetry::Context> {
     let mut cx = None;
     if let Some(get_context) = dispatch.downcast_ref::<WithContext>() {
         // If our span hasn't been built, we should build it and get the context in one call
         get_context.with_activated_otel_context(
             dispatch,
-            extensions,
+            span_id,
             |current_cx: &opentelemetry::Context| {
                 cx = Some(current_cx.clone());
             },
