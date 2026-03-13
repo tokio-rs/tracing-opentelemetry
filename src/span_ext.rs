@@ -170,6 +170,29 @@ pub trait OpenTelemetrySpanExt {
     /// ```            
     fn set_status(&self, status: Status);
 
+    /// Sets an OpenTelemetry name for this span.
+    /// This is useful for setting the name of a span that has a dynamic name, where the name is not
+    /// known when starting the span.
+    ///
+    /// For spans where the name is dynamic but known at creation, use the `otel.name` attribute
+    /// with the `span!` macro.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use tracing_opentelemetry::OpenTelemetrySpanExt;
+    /// use tracing::Span;
+    ///
+    /// /// // Generate a tracing span as usual
+    /// let app_root = tracing::span!(tracing::Level::INFO, "app_start");
+    ///
+    /// // Set the name of the span to `app_start (42)`.
+    /// let dynamic_data = 42;
+    /// let name = format!("app_start ({})", dynamic_data);
+    /// app_root.update_name(name.into());
+    /// ```
+    fn update_name(&self, name: Cow<'static, str>);
+
     /// Adds an OpenTelemetry event directly to this span, bypassing `tracing::event!`.
     /// This allows for adding events with dynamic attribute keys, similar to `set_attribute` for span attributes.
     /// Events are added with the current timestamp.
@@ -396,6 +419,24 @@ impl OpenTelemetrySpanExt for tracing::Span {
                 OtelDataState::Context { current_cx } => {
                     let span = current_cx.span();
                     span.set_status(status.take().unwrap());
+                }
+            });
+        });
+    }
+
+    fn update_name(&self, name: Cow<'static, str>) {
+        self.with_subscriber(move |(id, subscriber)| {
+            let mut name = Some(name);
+            let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
+                return;
+            };
+            get_context.with_context(subscriber, id, move |data| match &mut data.state {
+                OtelDataState::Builder { builder, .. } => {
+                    builder.name = name.take().unwrap();
+                }
+                OtelDataState::Context { current_cx } => {
+                    let span = current_cx.span();
+                    span.update_name(name.take().unwrap());
                 }
             });
         });
