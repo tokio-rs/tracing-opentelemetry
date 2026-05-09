@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Upgrade from opentelemetry to 0.32.0. Refer to the upstream
+  [changelog](https://github.com/open-telemetry/opentelemetry-rust/blob/main/opentelemetry-sdk/CHANGELOG.md#0320)
+- Update tracing ecosystem dependencies to latest compatible patch versions.
+
 ## [0.32.1](https://github.com/tokio-rs/tracing-opentelemetry/compare/v0.32.0...v0.32.1) - 2025-12-17
 
 ### Added
@@ -21,7 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
-- Remove unwanted dependency on opentelemetry sdk crate ([#241](https://github.com/tokio-rs/tracing-opentelemetry/pull/241))
+- Remove unwanted dependency on opentelemetry sdk
+  crate ([#241](https://github.com/tokio-rs/tracing-opentelemetry/pull/241))
 - update README.md links to use the latest version ([#239](https://github.com/tokio-rs/tracing-opentelemetry/pull/239))
 - remove thiserror and unused dependencies ([#238](https://github.com/tokio-rs/tracing-opentelemetry/pull/238))
 
@@ -34,10 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - OpenTelemetry context activation ([#202](https://github.com/tokio-rs/tracing-opentelemetry/pull/202))
-  - Trace ID and span ID can be obtained from `OtelData` via dedicated functions. Note that these
-    will be available only if the context has already been built. (#233)
-- Correctly track entered and exited state for timings ([#212](https://github.com/tokio-rs/tracing-opentelemetry/pull/212))
-- Slightly improve error message on version mismatch ([#211](https://github.com/tokio-rs/tracing-opentelemetry/pull/211))
+    - Trace ID and span ID can be obtained from `OtelData` via dedicated functions. Note that these
+      will be available only if the context has already been built. (#233)
+- Correctly track entered and exited state for
+  timings ([#212](https://github.com/tokio-rs/tracing-opentelemetry/pull/212))
+- Slightly improve error message on version
+  mismatch ([#211](https://github.com/tokio-rs/tracing-opentelemetry/pull/211))
 - Remove Lazy for thread_local static ([#215](https://github.com/tokio-rs/tracing-opentelemetry/pull/215))
 - Update description of special fields and semantic conventions
 
@@ -54,7 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opentelemetry semantic conventions for code.  ([#209](https://github.com/tokio-rs/tracing-opentelemetry/pull/209))
 - Remove the `metrics_gauge_unstable` feature.
 
-
 # 0.31.0 (June 2, 2025)
 
 ### Breaking Changes
@@ -65,8 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `OpenTelemetrySpanExt::add_event` and `OpenTelemetrySpanExt::add_event_with_timestamp` 
-  functions to allow adding OpenTelemetry events directly to a `tracing::Span`, enabling the use of dynamic attribute keys 
+- Add `OpenTelemetrySpanExt::add_event` and `OpenTelemetrySpanExt::add_event_with_timestamp`
+  functions to allow adding OpenTelemetry events directly to a `tracing::Span`, enabling the use of dynamic attribute
+  keys
   and custom event timestamps.
 
 # 0.30.0 (March 23, 2025)
@@ -223,6 +232,7 @@ This release adds optional support for recording `std::error::Error`s using
 Thanks to @lilymara-onesignal for contributing to this release!
 
 [thread-semconv]: https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/exceptions/
+
 [#2135]: https://github.com/tokio-rs/tracing/pull/2135
 
 # 0.17.3 (June 7, 2022)
@@ -261,9 +271,13 @@ Thanks to new contributors @lilymara-onesignal, @hubertbudzynski, and @DevinCarr
 for contributing to this release!
 
 [thread-semconv]: https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/#source-code-attributes
+
 [#2134]: https://github.com/tokio-rs/tracing/pull/2134
+
 [#2122]: https://github.com/tokio-rs/tracing/pull/2122
+
 [#2124]: https://github.com/tokio-rs/tracing/pull/2124
+
 [#2099]: https://github.com/tokio-rs/tracing/pull/2099
 
 # 0.17.2 (February 21, 2022)
@@ -276,6 +290,7 @@ This release fixes [an issue][#1944] introduced in v0.17.1 where
 - Compilation failure with `tracing-log` feature disabled ([#1949])
 
 [#1949]: https://github.com/tokio-rs/tracing/pull/1917
+
 [#1944]: https://github.com/tokio-rs/tracing/issues/1944
 
 # 0.17.1 (February 11, 2022) (YANKED)
@@ -286,6 +301,7 @@ This release fixes [an issue][#1944] introduced in v0.17.1 where
   forwarded events (defaults to on) ([#1911])
 - `OpenTelemetryLayer::with_event_location` to control whether source locations
   are recorded ([#1911])
+
 ### Changed
 
 - Avoid unnecessary allocations to improve performance when recording events
@@ -294,6 +310,7 @@ This release fixes [an issue][#1944] introduced in v0.17.1 where
 Thanks to @djc for contributing to this release!
 
 [#1917]: https://github.com/tokio-rs/tracing/pull/1917
+
 [#1911]: https://github.com/tokio-rs/tracing/pull/1911
 
 # 0.17.0 (February 3, 2022)
@@ -320,7 +337,9 @@ Thanks to @djc for contributing to this release!
 Thanks to @LehMaxence for contributing to this release!
 
 [v0.3.0 changelog]: https://github.com/tokio-rs/tracing/releases/tag/tracing-subscriber-0.3.0
+
 [#1516]: https://github.com/tokio-rs/tracing/pull/1516
+
 [#1677]: https://github.com/tokio-rs/tracing/pull/1677
 
 # 0.15.0 (August 7, 2021)
@@ -352,7 +371,9 @@ Thanks to @Drevoed, @lilymara-onesignal, and @Folyd for contributing
 to this release!
 
 [#1441]: https://github.com/tokio-rs/tracing/pull/1441
+
 [#1411]: https://github.com/tokio-rs/tracing/pull/1411
+
 [#1327]: https://github.com/tokio-rs/tracing/pull/1327
 
 # 0.13.0 (May 15, 2021)
