@@ -26,17 +26,17 @@ opentelemetry = { version = "0.32.0", default-features = false, features = [
     "trace",
 ] }
 
-tracing = { version = "0.1.44", default-features = false, features = ["std"] }
-tracing-core = "0.1.36"
-tracing-subscriber = { version = "0.3.23", default-features = false, features = [
+tracing = { version = "0.1.35", default-features = false, features = ["std"] }
+tracing-core = "0.1.28"
+tracing-subscriber = { version = "0.3.22", default-features = false, features = [
     "registry",
     "std",
 ] }
 tracing-log = { version = "0.2.0", default-features = false, optional = true }
-smallvec = { version = "1.15", optional = true }
+smallvec = { version = "1.0", optional = true }
 
 # Fix minimal-versions
-lazy_static = { version = "1.5.0", optional = true }
+lazy_static = { version = "1.0.2", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", default-features = false, features = [
@@ -57,12 +57,12 @@ opentelemetry-semantic-conventions = { version = "0.32.0", features = [
     "semconv_experimental",
 ] }
 tokio = { version = "1", features = ["full"] }
-tracing = { version = "0.1.44", default-features = false, features = [
+tracing = { version = "0.1.35", default-features = false, features = [
     "std",
     "attributes",
 ] }
-tracing-error = "0.2.1"
-tracing-subscriber = { version = "0.3.23", default-features = false, features = [
+tracing-error = "0.2.0"
+tracing-subscriber = { version = "0.3.0", default-features = false, features = [
     "registry",
     "std",
     "fmt",
@@ -72,8 +72,8 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 pprof = { version = "0.15.0", features = ["flamegraph", "criterion"] }
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
-js-sys = "0.3.94"
-web-time = "1.1.0"
+js-sys = "0.3.64"
+web-time = "1.0.0"
 
 [lib]
 bench = false
