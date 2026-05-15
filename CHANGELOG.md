@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Upgrade from opentelemetry to 0.32.0. Refer to the upstream
+[changelog](https://github.com/open-telemetry/opentelemetry-rust/blob/main/opentelemetry-sdk/CHANGELOG.md#0320)
+- Update tracing ecosystem dependencies to latest compatible patch versions.
+
 ## [0.32.1](https://github.com/tokio-rs/tracing-opentelemetry/compare/v0.32.0...v0.32.1) - 2025-12-17
 
 ### Added
