@@ -35,6 +35,7 @@ const SPAN_EVENT_COUNT_FIELD: &str = "otel.tracing_event_count";
 const EVENT_EXCEPTION_NAME: &str = "exception";
 const FIELD_EXCEPTION_MESSAGE: &str = "exception.message";
 const FIELD_EXCEPTION_STACKTRACE: &str = "exception.stacktrace";
+const FIELD_EXCEPTION_TYPE: &str = "exception.type";
 
 /// An [OpenTelemetry] propagation layer for use in a project that uses
 /// [tracing].
@@ -246,6 +247,45 @@ struct SpanEventVisitor<'a, 'b> {
 }
 
 impl field::Visit for SpanEventVisitor<'_, '_> {
+    #[cfg(all(tracing_unstable, feature = "valuable"))]
+    #[cfg_attr(docsrs, doc(cfg(all(tracing_unstable, feature = "valuable"))))]
+    fn record_value(&mut self, field: &field::Field, value: valuable::Value<'_>) {
+        match field.name() {
+            "message" => self.event_builder.name = format!("{value:?}").into(),
+            "error" if self.event_builder.name.is_empty() => {
+                if self.sem_conv_config.error_events_to_status {
+                    self.span_builder_updates
+                        .get_or_insert_with(SpanBuilderUpdates::default)
+                        .status
+                        .replace(otel::Status::error(format!("{value:?}")));
+                }
+                if self.sem_conv_config.error_events_to_exceptions {
+                    self.event_builder.name = EVENT_EXCEPTION_NAME.into();
+                    self.event_builder
+                        .attributes
+                        .push(KeyValue::new(FIELD_EXCEPTION_MESSAGE, format!("{value:?}")));
+
+                    let error_type = match value {
+                        valuable::Value::Structable(s) => s.definition().name().to_string(),
+                        valuable::Value::Enumerable(s) => s.definition().name().to_string(),
+                        _ => "unknown".to_string(),
+                    };
+                    self.event_builder
+                        .attributes
+                        .push(KeyValue::new(FIELD_EXCEPTION_TYPE, error_type));
+                } else {
+                    self.event_builder
+                        .attributes
+                        .push(KeyValue::new("error", format!("{value:?}")));
+                }
+            }
+            // Skip fields that are actually log metadata that have already been handled
+            #[cfg(feature = "tracing-log")]
+            name if name.starts_with("log.") => (),
+            _ => self.record_debug(field, &value),
+        }
+    }
+
     /// Record events on the underlying OpenTelemetry [`Span`] from `bool` values.
     ///
     /// [`Span`]: opentelemetry::trace::Span
