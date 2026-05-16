@@ -1139,7 +1139,7 @@ where
             } => {
                 let current_cx = {
                     let _guard = ReentrantTracingGuard::enter();
-                    #[cfg(all(test, __reentrant_tracing_test))]
+                    #[cfg(__reentrant_tracing_test)]
                     tracing::info!("This should not deadlock...");
                     let mut span = builder.start_with_context(&self.tracer, &parent_cx);
                     span.set_status(status);
@@ -1270,7 +1270,7 @@ where
                 let current_cx = self.ensure_context_snapshot(&otel_data);
                 let guard = {
                     let _guard = ReentrantTracingGuard::enter();
-                    #[cfg(all(test, __reentrant_tracing_test))]
+                    #[cfg(__reentrant_tracing_test)]
                     tracing::info!("This should not deadlock...");
                     current_cx.attach()
                 };
@@ -1383,14 +1383,12 @@ where
                 return; // The span must already have been closed by us
             };
 
-            let follows_data = follows_data.clone();
-            drop(follows_extensions);
-
             let follows_context = self
-                .ensure_context_snapshot(&follows_data)
+                .ensure_context_snapshot(follows_data)
                 .span()
                 .span_context()
                 .clone();
+            drop(follows_extensions);
 
             let deferred_link = {
                 let mut locked = data.lock();

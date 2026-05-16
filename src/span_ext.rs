@@ -5,7 +5,7 @@ use opentelemetry::{
     trace::{SpanContext, Status, TraceContextExt},
     Context, Key, KeyValue, Value,
 };
-use std::{borrow::Cow, fmt, time::SystemTime};
+use std::{borrow::Cow, cell::RefCell, fmt, rc::Rc, time::SystemTime};
 
 /// Utility functions to allow tracing [`Span`]s to accept and return
 /// [OpenTelemetry] [`Context`]s.
@@ -309,17 +309,21 @@ impl OpenTelemetrySpanExt for tracing::Span {
 
     fn add_link_with_attributes(&self, cx: SpanContext, attributes: Vec<KeyValue>) {
         if cx.is_valid() {
-            let mut cx = Some(cx);
-            let mut att = Some(attributes);
-            self.with_subscriber(move |(id, subscriber)| {
+            let cx = Rc::new(RefCell::new(Some(cx)));
+            let att = Rc::new(RefCell::new(Some(attributes)));
+            let deferred = Rc::new(RefCell::new(None::<(Context, SpanContext, Vec<KeyValue>)>));
+            self.with_subscriber(|(id, subscriber)| {
                 let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
                     return;
                 };
+                let cx = Rc::clone(&cx);
+                let att = Rc::clone(&att);
+                let deferred = Rc::clone(&deferred);
                 get_context.with_context(subscriber, id, move |data| {
-                    let Some(cx) = cx.take() else {
+                    let Some(cx) = cx.borrow_mut().take() else {
                         return;
                     };
-                    let attr = att.take().unwrap_or_default();
+                    let attr = att.borrow_mut().take().unwrap_or_default();
                     let follows_link = opentelemetry::trace::Link::new(cx, attr, 0);
                     match &mut data.state {
                         OtelDataState::Builder { builder, .. } => {
@@ -331,15 +335,21 @@ impl OpenTelemetrySpanExt for tracing::Span {
                                 .push(follows_link);
                         }
                         OtelDataState::Context { current_cx } => {
-                            // If we have a context, add the link to the span in the context
-                            current_cx
-                                .span()
-                                .add_link(follows_link.span_context, follows_link.attributes);
+                            // Defer OpenTelemetry calls until after lock is released.
+                            *deferred.borrow_mut() = Some((
+                                current_cx.clone(),
+                                follows_link.span_context,
+                                follows_link.attributes,
+                            ));
                         }
                         OtelDataState::Starting => {}
                     }
                 });
             });
+            let deferred_action = deferred.borrow_mut().take();
+            if let Some((current_cx, span_context, attributes)) = deferred_action {
+                current_cx.span().add_link(span_context, attributes);
+            }
         }
     }
 
@@ -361,11 +371,14 @@ impl OpenTelemetrySpanExt for tracing::Span {
     }
 
     fn set_attribute(&self, key: impl Into<Key>, value: impl Into<Value>) {
-        self.with_subscriber(move |(id, subscriber)| {
+        let key_value = Rc::new(RefCell::new(Some(KeyValue::new(key.into(), value.into()))));
+        let deferred = Rc::new(RefCell::new(None::<(Context, KeyValue)>));
+        self.with_subscriber(|(id, subscriber)| {
             let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
                 return;
             };
-            let mut key_value = Some(KeyValue::new(key.into(), value.into()));
+            let key_value = Rc::clone(&key_value);
+            let deferred = Rc::clone(&deferred);
             get_context.with_context(subscriber, id, move |data| {
                 match &mut data.state {
                     OtelDataState::Builder { builder, .. } => {
@@ -376,35 +389,46 @@ impl OpenTelemetrySpanExt for tracing::Span {
                             .attributes
                             .as_mut()
                             .unwrap()
-                            .push(key_value.take().unwrap());
+                            .push(key_value.borrow_mut().take().unwrap());
                     }
                     OtelDataState::Context { current_cx } => {
-                        let span = current_cx.span();
-                        span.set_attribute(key_value.take().unwrap());
+                        *deferred.borrow_mut() =
+                            Some((current_cx.clone(), key_value.borrow_mut().take().unwrap()));
                     }
                     OtelDataState::Starting => {}
                 };
             });
         });
+        let deferred_action = deferred.borrow_mut().take();
+        if let Some((current_cx, key_value)) = deferred_action {
+            current_cx.span().set_attribute(key_value);
+        }
     }
 
     fn set_status(&self, status: Status) {
-        self.with_subscriber(move |(id, subscriber)| {
-            let mut status = Some(status);
+        let status = Rc::new(RefCell::new(Some(status)));
+        let deferred = Rc::new(RefCell::new(None::<(Context, Status)>));
+        self.with_subscriber(|(id, subscriber)| {
             let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
                 return;
             };
+            let status = Rc::clone(&status);
+            let deferred = Rc::clone(&deferred);
             get_context.with_context(subscriber, id, move |data| match &mut data.state {
                 OtelDataState::Builder { status: s, .. } => {
-                    *s = status.take().unwrap();
+                    *s = status.borrow_mut().take().unwrap();
                 }
                 OtelDataState::Context { current_cx } => {
-                    let span = current_cx.span();
-                    span.set_status(status.take().unwrap());
+                    *deferred.borrow_mut() =
+                        Some((current_cx.clone(), status.borrow_mut().take().unwrap()));
                 }
                 OtelDataState::Starting => {}
             });
         });
+        let deferred_action = deferred.borrow_mut().take();
+        if let Some((current_cx, status)) = deferred_action {
+            current_cx.span().set_status(status);
+        }
     }
 
     fn add_event(&self, name: impl Into<Cow<'static, str>>, attributes: Vec<KeyValue>) {
@@ -417,15 +441,18 @@ impl OpenTelemetrySpanExt for tracing::Span {
         timestamp: SystemTime,
         attributes: Vec<KeyValue>,
     ) {
-        self.with_subscriber(move |(id, subscriber)| {
-            let mut event = Some(opentelemetry::trace::Event::new(
-                name, timestamp, attributes, 0,
-            ));
+        let event = Rc::new(RefCell::new(Some(opentelemetry::trace::Event::new(
+            name, timestamp, attributes, 0,
+        ))));
+        let deferred = Rc::new(RefCell::new(None::<(Context, opentelemetry::trace::Event)>));
+        self.with_subscriber(|(id, subscriber)| {
             let Some(get_context) = subscriber.downcast_ref::<WithContext>() else {
                 return;
             };
+            let event = Rc::clone(&event);
+            let deferred = Rc::clone(&deferred);
             get_context.with_context(subscriber, id, move |data| {
-                let Some(event) = event.take() else {
+                let Some(event) = event.borrow_mut().take() else {
                     return;
                 };
                 match &mut data.state {
@@ -436,16 +463,19 @@ impl OpenTelemetrySpanExt for tracing::Span {
                             .push(event);
                     }
                     OtelDataState::Context { current_cx } => {
-                        let span = current_cx.span();
-                        span.add_event_with_timestamp(
-                            event.name,
-                            event.timestamp,
-                            event.attributes,
-                        );
+                        *deferred.borrow_mut() = Some((current_cx.clone(), event));
                     }
                     OtelDataState::Starting => {}
                 }
             });
         });
+        let deferred_action = deferred.borrow_mut().take();
+        if let Some((current_cx, event)) = deferred_action {
+            current_cx.span().add_event_with_timestamp(
+                event.name,
+                event.timestamp,
+                event.attributes,
+            );
+        }
     }
 }
