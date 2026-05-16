@@ -144,18 +144,29 @@ where
                 Key::from_static_str(SPAN_EVENT_COUNT_FIELD),
                 Value::I64(i64::from(count)),
             );
-            match &mut otel_data.lock().state {
-                OtelDataState::Builder {
-                    builder,
-                    parent_cx: _,
-                    status: _,
-                } => {
-                    builder.attributes.get_or_insert(Vec::new()).push(key_value);
+            let current_cx = {
+                let mut locked = otel_data.lock();
+                locked = otel_data.wait_while_starting(locked);
+                match &mut locked.state {
+                    OtelDataState::Builder {
+                        builder,
+                        parent_cx: _,
+                        status: _,
+                    } => {
+                        builder
+                            .attributes
+                            .get_or_insert(Vec::new())
+                            .push(key_value.clone());
+                        None
+                    }
+                    OtelDataState::Context { current_cx } => Some(current_cx.clone()),
+                    OtelDataState::Starting => unreachable!("wait_while_starting returned while starting"),
                 }
-                OtelDataState::Context { current_cx } => {
-                    let span = current_cx.span();
-                    span.set_attribute(key_value);
-                }
+            };
+
+            if let Some(current_cx) = current_cx {
+                let span = current_cx.span();
+                span.set_attribute(key_value);
             }
         }
 

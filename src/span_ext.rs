@@ -293,6 +293,9 @@ impl OpenTelemetrySpanExt for tracing::Span {
                     OtelDataState::Context { .. } => {
                         *result_ref = Err(SetParentError::AlreadyStarted);
                     }
+                    OtelDataState::Starting => {
+                        *result_ref = Err(SetParentError::AlreadyStarted);
+                    }
                 }
             });
             result
@@ -333,6 +336,7 @@ impl OpenTelemetrySpanExt for tracing::Span {
                                 .span()
                                 .add_link(follows_link.span_context, follows_link.attributes);
                         }
+                        OtelDataState::Starting => {}
                     }
                 });
             });
@@ -378,6 +382,7 @@ impl OpenTelemetrySpanExt for tracing::Span {
                         let span = current_cx.span();
                         span.set_attribute(key_value.take().unwrap());
                     }
+                    OtelDataState::Starting => {}
                 };
             });
         });
@@ -397,6 +402,7 @@ impl OpenTelemetrySpanExt for tracing::Span {
                     let span = current_cx.span();
                     span.set_status(status.take().unwrap());
                 }
+                OtelDataState::Starting => {}
             });
         });
     }
@@ -437,6 +443,7 @@ impl OpenTelemetrySpanExt for tracing::Span {
                             event.attributes,
                         );
                     }
+                    OtelDataState::Starting => {}
                 }
             });
         });
