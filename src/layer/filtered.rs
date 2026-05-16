@@ -160,7 +160,9 @@ where
                         None
                     }
                     OtelDataState::Context { current_cx } => Some(current_cx.clone()),
-                    OtelDataState::Starting => unreachable!("wait_while_starting returned while starting"),
+                    OtelDataState::Starting => {
+                        unreachable!("wait_while_starting returned while starting")
+                    }
                 }
             };
 

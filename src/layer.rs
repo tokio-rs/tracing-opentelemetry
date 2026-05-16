@@ -1115,11 +1115,13 @@ where
                             builder,
                             parent_cx,
                             status,
-                        } => return ContextActivation::Start {
-                            builder,
-                            parent_cx,
-                            status,
-                        },
+                        } => {
+                            return ContextActivation::Start {
+                                builder,
+                                parent_cx,
+                                status,
+                            }
+                        }
                         _ => unreachable!("state changed while activating context"),
                     }
                 }
@@ -1332,7 +1334,7 @@ where
         });
         let extensions = span.extensions();
         if let Some(otel_data) = extensions.get::<OtelDataLock>() {
-            let deferred = loop {
+            let deferred = {
                 let mut locked = otel_data.lock();
                 locked = otel_data.wait_while_starting(locked);
                 match &mut locked.state {
@@ -1341,13 +1343,15 @@ where
                     } => {
                         // If the builder is present, then update it.
                         updates.update(builder, status);
-                        break DeferredContextAction::None;
+                        DeferredContextAction::None
                     }
-                    OtelDataState::Context { current_cx, .. } => break DeferredContextAction::Update {
+                    OtelDataState::Context { current_cx, .. } => DeferredContextAction::Update {
                         updates,
                         current_cx: current_cx.clone(),
                     },
-                    OtelDataState::Starting => unreachable!("wait_while_starting returned while starting"),
+                    OtelDataState::Starting => {
+                        unreachable!("wait_while_starting returned while starting")
+                    }
                 }
             };
 
@@ -1388,7 +1392,7 @@ where
                 .span_context()
                 .clone();
 
-            let deferred_link = loop {
+            let deferred_link = {
                 let mut locked = data.lock();
                 locked = data.wait_while_starting(locked);
                 match &mut locked.state {
@@ -1396,12 +1400,15 @@ where
                         if let Some(ref mut links) = builder.links {
                             links.push(otel::Link::with_context(follows_context.clone()));
                         } else {
-                            builder.links = Some(vec![otel::Link::with_context(follows_context.clone())]);
+                            builder.links =
+                                Some(vec![otel::Link::with_context(follows_context.clone())]);
                         }
-                        break None;
+                        None
                     }
-                    OtelDataState::Context { current_cx, .. } => break Some(current_cx.clone()),
-                    OtelDataState::Starting => unreachable!("wait_while_starting returned while starting"),
+                    OtelDataState::Context { current_cx, .. } => Some(current_cx.clone()),
+                    OtelDataState::Starting => {
+                        unreachable!("wait_while_starting returned while starting")
+                    }
                 }
             };
 
@@ -1516,7 +1523,7 @@ where
                     }
                 }
 
-                let deferred = loop {
+                let deferred = {
                     let mut locked = otel_data.lock();
                     locked = otel_data.wait_while_starting(locked);
                     match &mut locked.state {
@@ -1536,15 +1543,17 @@ where
                             } else {
                                 builder.events = Some(vec![otel_event]);
                             }
-                            break None;
+                            None
                         }
-                        OtelDataState::Context { current_cx, .. } => break Some((
+                        OtelDataState::Context { current_cx, .. } => Some((
                             current_cx.clone(),
                             otel_event,
                             *meta.level() == tracing_core::Level::ERROR,
                             builder_updates.take(),
                         )),
-                        OtelDataState::Starting => unreachable!("wait_while_starting returned while starting"),
+                        OtelDataState::Starting => {
+                            unreachable!("wait_while_starting returned while starting")
+                        }
                     }
                 };
 

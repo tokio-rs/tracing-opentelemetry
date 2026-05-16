@@ -200,5 +200,8 @@ fn test_get_otel_context_reentrant_attach_path() {
 
     let extracted = extracted_contexts[0].span().span_context().span_id();
     let exported = spans[0].span_context.span_id();
-    assert_eq!(extracted, exported, "Reentrant attach should still yield the active span context");
+    assert_eq!(
+        extracted, exported,
+        "Reentrant attach should still yield the active span context"
+    );
 }
