@@ -80,6 +80,7 @@ bench = false
 
 [lints.rust]
 unnameable_types = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(__reentrant_tracing_test)'] }
 
 [[bench]]
 name = "trace"

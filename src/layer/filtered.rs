@@ -8,7 +8,7 @@ use tracing_subscriber::{
     Layer,
 };
 
-use crate::{OtelData, OtelDataState};
+use crate::{OtelDataLock, OtelDataState};
 
 use super::{OpenTelemetryLayer, SPAN_EVENT_COUNT_FIELD};
 
@@ -132,15 +132,19 @@ where
 
     fn on_close(&self, id: span::Id, ctx: Context<'_, S>) {
         let span = ctx.span(&id).expect("Span not found, this is a bug");
-        let mut extensions = span.extensions_mut();
+        let otel_data = span.extensions().get::<OtelDataLock>().cloned();
 
-        let count = extensions.remove::<EventCount>().map_or(0, |count| count.0);
-        if let Some(OtelData { state, end_time: _ }) = extensions.get_mut::<OtelData>() {
+        let count = span
+            .extensions_mut()
+            .remove::<EventCount>()
+            .map_or(0, |count| count.0);
+
+        if let Some(otel_data) = otel_data {
             let key_value = KeyValue::new(
                 Key::from_static_str(SPAN_EVENT_COUNT_FIELD),
                 Value::I64(i64::from(count)),
             );
-            match state {
+            match &mut otel_data.lock().state {
                 OtelDataState::Builder {
                     builder,
                     parent_cx: _,
@@ -155,7 +159,6 @@ where
             }
         }
 
-        drop(extensions);
         drop(span);
 
         self.inner.on_close(id, ctx);
