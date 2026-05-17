@@ -1011,10 +1011,18 @@ where
         lookup
     }
 
-    /// Provides mutable access to a span's OpenTelemetry state.
+    /// Provides access to the OpenTelemetry data (`OtelData`) stored in a tracing span.
     ///
-    /// If span startup is in progress, this waits for startup to finish before
-    /// invoking `f`.
+    /// This function retrieves the span from the subscriber's registry using the provided span ID,
+    /// and then applies the callback function `f` to the span's `OtelData` if present.
+    ///
+    /// # Parameters
+    /// * `dispatch` - A reference to the tracing dispatch, used to access the subscriber
+    /// * `id` - The ID of the span to look up
+    /// * `f` - A callback function that receives a mutable reference to the span's `OtelData`
+    ///   This callback is used to manipulate or extract information from the OpenTelemetry context
+    ///   associated with the tracing span
+    ///
     fn get_context(dispatch: &tracing::Dispatch, id: &span::Id, f: &mut dyn FnMut(&mut OtelData)) {
         if let Some(otel_data) = Self::lookup_otel_data(dispatch, id) {
             let mut locked = otel_data.lock();
@@ -1023,8 +1031,18 @@ where
         }
     }
 
-    /// Activates a span's OpenTelemetry context and then provides mutable access
-    /// to the span state.
+    /// Retrieves the OpenTelemetry data for a span and activates its context before calling
+    /// the provided function.
+    ///
+    /// This function retrieves the span from the subscriber's registry using the provided
+    /// span ID, activates the OTel `Context` in the span's `OtelData` if present, and then
+    /// applies the callback function `f` to the `OtelData`.
+    ///
+    /// # Parameters
+    ///
+    /// * `dispatch` - The tracing dispatch to downcast and retrieve the span from
+    /// * `id` - The span ID to look up in the registry
+    /// * `f` - The closure to invoke with mutable access to the span's `OtelData`
     fn get_activated_context(
         dispatch: &tracing::Dispatch,
         id: &span::Id,
