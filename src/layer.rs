@@ -1053,12 +1053,9 @@ where
             .expect("layer should downcast to expected type; this is a bug!");
 
         if let Some(otel_data) = Self::lookup_otel_data(dispatch, id) {
-            let current_cx = layer.ensure_context_snapshot(&otel_data);
+            layer.ensure_context_snapshot(&otel_data);
             let mut locked = otel_data.lock();
             locked = otel_data.wait_while_starting(locked);
-            if let OtelDataState::Context { current_cx: stored } = &mut locked.state {
-                *stored = current_cx;
-            }
             f(&mut locked);
         }
     }
@@ -1077,21 +1074,13 @@ where
     /// * `f` - The closure to invoke with a reference to the OTel `Context`
     fn get_activated_otel_context(
         dispatch: &tracing::Dispatch,
-        span: &span::Id,
+        id: &span::Id,
         f: &mut dyn FnMut(&OtelContext),
     ) {
         let layer = dispatch
             .downcast_ref::<OpenTelemetryLayer<S, T>>()
             .expect("layer should downcast to expected type; this is a bug!");
-        let subscriber = dispatch
-            .downcast_ref::<S>()
-            .expect("subscriber should downcast to expected type; this is a bug!");
-        let span = subscriber
-            .span(span)
-            .expect("registry should have a span for the current ID");
-        let otel_data = span.extensions().get::<OtelDataLock>().cloned();
-
-        if let Some(otel_data) = otel_data {
+        if let Some(otel_data) = Self::lookup_otel_data(dispatch, id) {
             let current_cx = layer.ensure_context_snapshot(&otel_data);
             f(&current_cx);
         }
