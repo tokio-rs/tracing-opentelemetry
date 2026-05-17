@@ -54,6 +54,11 @@ impl ReentrantTracingGuard {
         });
         Self { previous }
     }
+
+    fn with<T>(f: impl FnOnce() -> T) -> T {
+        let _guard = Self::enter();
+        f()
+    }
 }
 
 impl Drop for ReentrantTracingGuard {
@@ -212,11 +217,6 @@ impl WithContext {
     ) {
         (self.with_activated_otel_context)(dispatch, id, &mut f)
     }
-}
-
-enum SpanLookup {
-    Missing,
-    Found(OtelDataLock),
 }
 
 fn str_to_span_kind(s: &str) -> Option<otel::SpanKind> {
@@ -998,7 +998,8 @@ where
         }
     }
 
-    fn lookup_otel_data(dispatch: &tracing::Dispatch, id: &span::Id) -> SpanLookup {
+    /// Returns the span-local OpenTelemetry storage for the given tracing span ID.
+    fn lookup_otel_data(dispatch: &tracing::Dispatch, id: &span::Id) -> Option<OtelDataLock> {
         let subscriber = dispatch
             .downcast_ref::<S>()
             .expect("subscriber should downcast to expected type; this is a bug!");
@@ -1006,23 +1007,24 @@ where
             .span(id)
             .expect("registry should have a span for the current ID");
 
-        let lookup = span
-            .extensions()
-            .get::<OtelDataLock>()
-            .cloned()
-            .map(SpanLookup::Found)
-            .unwrap_or(SpanLookup::Missing);
+        let lookup = span.extensions().get::<OtelDataLock>().cloned();
         lookup
     }
 
+    /// Provides mutable access to a span's OpenTelemetry state.
+    ///
+    /// If span startup is in progress, this waits for startup to finish before
+    /// invoking `f`.
     fn get_context(dispatch: &tracing::Dispatch, id: &span::Id, f: &mut dyn FnMut(&mut OtelData)) {
-        if let SpanLookup::Found(otel_data) = Self::lookup_otel_data(dispatch, id) {
+        if let Some(otel_data) = Self::lookup_otel_data(dispatch, id) {
             let mut locked = otel_data.lock();
             locked = otel_data.wait_while_starting(locked);
             f(&mut locked);
         }
     }
 
+    /// Activates a span's OpenTelemetry context and then provides mutable access
+    /// to the span state.
     fn get_activated_context(
         dispatch: &tracing::Dispatch,
         id: &span::Id,
@@ -1032,7 +1034,7 @@ where
             .downcast_ref::<OpenTelemetryLayer<S, T>>()
             .expect("layer should downcast to expected type; this is a bug!");
 
-        if let SpanLookup::Found(otel_data) = Self::lookup_otel_data(dispatch, id) {
+        if let Some(otel_data) = Self::lookup_otel_data(dispatch, id) {
             let current_cx = layer.ensure_context_snapshot(&otel_data);
             let mut locked = otel_data.lock();
             locked = otel_data.wait_while_starting(locked);
@@ -1137,14 +1139,13 @@ where
                 parent_cx,
                 status,
             } => {
-                let current_cx = {
-                    let _guard = ReentrantTracingGuard::enter();
+                let current_cx = ReentrantTracingGuard::with(|| {
                     #[cfg(__reentrant_tracing_test)]
                     tracing::info!("This should not deadlock...");
                     let mut span = builder.start_with_context(&self.tracer, &parent_cx);
                     span.set_status(status);
                     parent_cx.with_span(span)
-                };
+                });
 
                 let mut locked = otel_data.lock();
                 locked.state = OtelDataState::Context {
@@ -1268,12 +1269,11 @@ where
             let otel_data = span.extensions().get::<OtelDataLock>().cloned();
             if let Some(otel_data) = otel_data {
                 let current_cx = self.ensure_context_snapshot(&otel_data);
-                let guard = {
-                    let _guard = ReentrantTracingGuard::enter();
+                let guard = ReentrantTracingGuard::with(|| {
                     #[cfg(__reentrant_tracing_test)]
                     tracing::info!("This should not deadlock...");
                     current_cx.attach()
-                };
+                });
                 GUARD_STACK.with(|stack| stack.borrow_mut().push(id.clone(), guard));
             }
 
@@ -1360,8 +1360,9 @@ where
                 current_cx,
             } = deferred
             {
-                let _guard = ReentrantTracingGuard::enter();
-                updates.update_span(&current_cx.span());
+                ReentrantTracingGuard::with(|| {
+                    updates.update_span(&current_cx.span());
+                });
             }
         }
     }
@@ -1411,8 +1412,9 @@ where
             };
 
             if let Some(current_cx) = deferred_link {
-                let _guard = ReentrantTracingGuard::enter();
-                current_cx.span().add_link(follows_context, vec![]);
+                ReentrantTracingGuard::with(|| {
+                    current_cx.span().add_link(follows_context, vec![]);
+                });
             }
         }
     }
@@ -1556,16 +1558,17 @@ where
                 };
 
                 if let Some((current_cx, otel_event, set_error, builder_updates)) = deferred {
-                    let _guard = ReentrantTracingGuard::enter();
-                    let span = current_cx.span();
-                    // TODO:ban fix this with accessor in SpanRef that can check the span status
-                    if set_error {
-                        span.set_status(otel::Status::error(""));
-                    }
-                    if let Some(builder_updates) = builder_updates {
-                        builder_updates.update_span(&span);
-                    }
-                    span.add_event(otel_event.name, otel_event.attributes);
+                    ReentrantTracingGuard::with(|| {
+                        let span = current_cx.span();
+                        // TODO:ban fix this with accessor in SpanRef that can check the span status
+                        if set_error {
+                            span.set_status(otel::Status::error(""));
+                        }
+                        if let Some(builder_updates) = builder_updates {
+                            builder_updates.update_span(&span);
+                        }
+                        span.add_event(otel_event.name, otel_event.attributes);
+                    });
                 }
             };
         }
