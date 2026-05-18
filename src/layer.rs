@@ -54,17 +54,19 @@ impl ReentrantTracingGuard {
         });
         Self { previous }
     }
-
-    fn with<T>(f: impl FnOnce() -> T) -> T {
-        let _guard = Self::enter();
-        f()
-    }
 }
 
 impl Drop for ReentrantTracingGuard {
     fn drop(&mut self) {
         INSIDE_TRACING.with(|inside| inside.set(self.previous));
     }
+}
+
+fn prevent_reentrant_call<T>(f: impl FnOnce() -> T) -> T {
+    let _guard = ReentrantTracingGuard::enter();
+    #[cfg(all(test, __reentrant_tracing_test))]
+    tracing::info!("This should not deadlock...");
+    f()
 }
 
 enum ContextActivation {
@@ -1146,9 +1148,7 @@ where
                 parent_cx,
                 status,
             } => {
-                let current_cx = ReentrantTracingGuard::with(|| {
-                    #[cfg(__reentrant_tracing_test)]
-                    tracing::info!("This should not deadlock...");
+                let current_cx = prevent_reentrant_call(|| {
                     let mut span = builder.start_with_context(&self.tracer, &parent_cx);
                     span.set_status(status);
                     parent_cx.with_span(span)
@@ -1276,11 +1276,7 @@ where
             let otel_data = span.extensions().get::<OtelDataLock>().cloned();
             if let Some(otel_data) = otel_data {
                 let current_cx = self.ensure_context_snapshot(&otel_data);
-                let guard = ReentrantTracingGuard::with(|| {
-                    #[cfg(__reentrant_tracing_test)]
-                    tracing::info!("This should not deadlock...");
-                    current_cx.attach()
-                });
+                let guard = prevent_reentrant_call(|| current_cx.attach());
                 GUARD_STACK.with(|stack| stack.borrow_mut().push(id.clone(), guard));
             }
 
@@ -1367,7 +1363,7 @@ where
                 current_cx,
             } = deferred
             {
-                ReentrantTracingGuard::with(|| {
+                prevent_reentrant_call(|| {
                     updates.update_span(&current_cx.span());
                 });
             }
@@ -1419,7 +1415,7 @@ where
             };
 
             if let Some(current_cx) = deferred_link {
-                ReentrantTracingGuard::with(|| {
+                prevent_reentrant_call(|| {
                     current_cx.span().add_link(follows_context, vec![]);
                 });
             }
@@ -1565,7 +1561,7 @@ where
                 };
 
                 if let Some((current_cx, otel_event, set_error, builder_updates)) = deferred {
-                    ReentrantTracingGuard::with(|| {
+                    prevent_reentrant_call(|| {
                         let span = current_cx.span();
                         // TODO:ban fix this with accessor in SpanRef that can check the span status
                         if set_error {
