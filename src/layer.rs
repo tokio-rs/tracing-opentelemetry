@@ -41,6 +41,15 @@ std::thread_local! {
     static INSIDE_TRACING: Cell<bool> = const { Cell::new(false) };
 }
 
+fn prevent_reentrant_call<T>(f: impl FnOnce() -> T) -> T {
+    let old_value = INSIDE_TRACING.with(|inside| inside.replace(true));
+    #[cfg(all(test, __reentrant_tracing_test))]
+    tracing::info!("This should not deadlock...");
+    let result = f();
+    INSIDE_TRACING.with(|inside| inside.set(old_value));
+    result
+}
+
 /// An [OpenTelemetry] propagation layer for use in a project that uses
 /// [tracing].
 ///
@@ -1076,13 +1085,11 @@ where
         {
             // We purposefully disable all tracing inside this call. Whoever called this is holding
             // a lock on `OtelData` and this is not reentrant.
-            INSIDE_TRACING.with(|inside| inside.set(true));
-            #[cfg(all(test, __reentrant_tracing_test))]
-            tracing::info!("This should not deadlock...");
-            let mut span = builder.start_with_context(&self.tracer, &parent_cx);
-            span.set_status(status);
-            let current_cx = parent_cx.with_span(span);
-            INSIDE_TRACING.with(|inside| inside.set(false));
+            let current_cx = prevent_reentrant_call(|| {
+                let mut span = builder.start_with_context(&self.tracer, &parent_cx);
+                span.set_status(status);
+                parent_cx.with_span(span)
+            });
 
             otel_data.state = OtelDataState::Context { current_cx };
         }
@@ -1216,7 +1223,7 @@ where
             let otel_data = span.extensions().get::<OtelDataLock>().cloned();
             if let Some(otel_data) = otel_data {
                 self.with_started_cx(&mut otel_data.lock(), &|cx| {
-                    let guard = cx.clone().attach();
+                    let guard = prevent_reentrant_call(|| cx.clone().attach());
                     GUARD_STACK.with(|stack| stack.borrow_mut().push(id.clone(), guard));
                 });
             }
@@ -1328,7 +1335,7 @@ where
                     }
                 }
                 OtelDataState::Context { current_cx, .. } => {
-                    current_cx.span().add_link(follows_context, vec![]);
+                    prevent_reentrant_call(|| current_cx.span().add_link(follows_context, vec![]));
                 }
             }
         }
