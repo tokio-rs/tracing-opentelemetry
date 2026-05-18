@@ -1098,14 +1098,7 @@ where
     fn with_started_cx<U>(&self, otel_data: &mut OtelData, f: &dyn Fn(&OtelContext) -> U) -> U {
         self.start_cx(otel_data);
         match &otel_data.state {
-            OtelDataState::Context { current_cx, .. } => {
-                INSIDE_TRACING.with(|inside| inside.set(true));
-                #[cfg(all(test, __reentrant_tracing_test))]
-                tracing::info!("This should not deadlock...");
-                let result = f(current_cx);
-                INSIDE_TRACING.with(|inside| inside.set(false));
-                result
-            }
+            OtelDataState::Context { current_cx, .. } => prevent_reentrant_call(|| f(current_cx)),
             _ => panic!("OtelDataState should be a Context after starting it; this is a bug!"),
         }
     }
