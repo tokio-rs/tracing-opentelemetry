@@ -321,7 +321,6 @@ impl OpenTelemetrySpanExt for tracing::Span {
                         return;
                     };
                     let attr = att.take().unwrap_or_default();
-                    let follows_link = opentelemetry::trace::Link::new(cx, attr, 0);
                     match &mut data.state {
                         OtelDataState::Builder { builder, .. } => {
                             // If we still have a builder, update the data so it uses the
@@ -329,15 +328,11 @@ impl OpenTelemetrySpanExt for tracing::Span {
                             builder
                                 .links
                                 .get_or_insert_with(|| Vec::with_capacity(1))
-                                .push(follows_link);
+                                .push(opentelemetry::trace::Link::new(cx, attr, 0));
                         }
                         OtelDataState::Context { current_cx } => {
                             // Defer OpenTelemetry calls until after lock is released.
-                            deferred = Some((
-                                current_cx.clone(),
-                                follows_link.span_context,
-                                follows_link.attributes,
-                            ));
+                            deferred = Some((current_cx.clone(), cx, attr));
                         }
                         OtelDataState::Starting => {}
                     }
@@ -376,13 +371,9 @@ impl OpenTelemetrySpanExt for tracing::Span {
             get_context.with_context(subscriber, id, |data| {
                 match &mut data.state {
                     OtelDataState::Builder { builder, .. } => {
-                        if builder.attributes.is_none() {
-                            builder.attributes = Some(Default::default());
-                        }
                         builder
                             .attributes
-                            .as_mut()
-                            .unwrap()
+                            .get_or_insert_with(Vec::new)
                             .push(key_value.take().unwrap());
                     }
                     OtelDataState::Context { current_cx } => {
