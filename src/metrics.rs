@@ -22,6 +22,7 @@ const METRIC_PREFIX_MONOTONIC_COUNTER: &str = "monotonic_counter.";
 const METRIC_PREFIX_COUNTER: &str = "counter.";
 const METRIC_PREFIX_HISTOGRAM: &str = "histogram.";
 const METRIC_PREFIX_GAUGE: &str = "gauge.";
+const METRIC_UNIT_FIELD: &str = "otel.unit";
 
 const I64_MAX: u64 = i64::MAX as u64;
 
@@ -59,6 +60,7 @@ impl Instruments {
         meter: &Meter,
         instrument_type: InstrumentType,
         metric_name: &'static str,
+        unit: Option<&str>,
         attributes: &[KeyValue],
     ) {
         fn update_or_insert<T>(
@@ -89,7 +91,13 @@ impl Instruments {
                 update_or_insert(
                     &self.u64_counter,
                     metric_name,
-                    || meter.u64_counter(metric_name).build(),
+                    || {
+                        let mut b = meter.u64_counter(metric_name);
+                        if let Some(u) = unit {
+                            b = b.with_unit(u.to_owned());
+                        }
+                        b.build()
+                    },
                     |ctr| ctr.add(value, attributes),
                 );
             }
@@ -97,7 +105,13 @@ impl Instruments {
                 update_or_insert(
                     &self.f64_counter,
                     metric_name,
-                    || meter.f64_counter(metric_name).build(),
+                    || {
+                        let mut b = meter.f64_counter(metric_name);
+                        if let Some(u) = unit {
+                            b = b.with_unit(u.to_owned());
+                        }
+                        b.build()
+                    },
                     |ctr| ctr.add(value, attributes),
                 );
             }
@@ -105,7 +119,13 @@ impl Instruments {
                 update_or_insert(
                     &self.i64_up_down_counter,
                     metric_name,
-                    || meter.i64_up_down_counter(metric_name).build(),
+                    || {
+                        let mut b = meter.i64_up_down_counter(metric_name);
+                        if let Some(u) = unit {
+                            b = b.with_unit(u.to_owned());
+                        }
+                        b.build()
+                    },
                     |ctr| ctr.add(value, attributes),
                 );
             }
@@ -113,7 +133,13 @@ impl Instruments {
                 update_or_insert(
                     &self.f64_up_down_counter,
                     metric_name,
-                    || meter.f64_up_down_counter(metric_name).build(),
+                    || {
+                        let mut b = meter.f64_up_down_counter(metric_name);
+                        if let Some(u) = unit {
+                            b = b.with_unit(u.to_owned());
+                        }
+                        b.build()
+                    },
                     |ctr| ctr.add(value, attributes),
                 );
             }
@@ -121,7 +147,13 @@ impl Instruments {
                 update_or_insert(
                     &self.u64_histogram,
                     metric_name,
-                    || meter.u64_histogram(metric_name).build(),
+                    || {
+                        let mut b = meter.u64_histogram(metric_name);
+                        if let Some(u) = unit {
+                            b = b.with_unit(u.to_owned());
+                        }
+                        b.build()
+                    },
                     |rec| rec.record(value, attributes),
                 );
             }
@@ -129,7 +161,13 @@ impl Instruments {
                 update_or_insert(
                     &self.f64_histogram,
                     metric_name,
-                    || meter.f64_histogram(metric_name).build(),
+                    || {
+                        let mut b = meter.f64_histogram(metric_name);
+                        if let Some(u) = unit {
+                            b = b.with_unit(u.to_owned());
+                        }
+                        b.build()
+                    },
                     |rec| rec.record(value, attributes),
                 );
             }
@@ -137,7 +175,13 @@ impl Instruments {
                 update_or_insert(
                     &self.u64_gauge,
                     metric_name,
-                    || meter.u64_gauge(metric_name).build(),
+                    || {
+                        let mut b = meter.u64_gauge(metric_name);
+                        if let Some(u) = unit {
+                            b = b.with_unit(u.to_owned());
+                        }
+                        b.build()
+                    },
                     |rec| rec.record(value, attributes),
                 );
             }
@@ -145,7 +189,13 @@ impl Instruments {
                 update_or_insert(
                     &self.i64_gauge,
                     metric_name,
-                    || meter.i64_gauge(metric_name).build(),
+                    || {
+                        let mut b = meter.i64_gauge(metric_name);
+                        if let Some(u) = unit {
+                            b = b.with_unit(u.to_owned());
+                        }
+                        b.build()
+                    },
                     |rec| rec.record(value, attributes),
                 );
             }
@@ -153,7 +203,13 @@ impl Instruments {
                 update_or_insert(
                     &self.f64_gauge,
                     metric_name,
-                    || meter.f64_gauge(metric_name).build(),
+                    || {
+                        let mut b = meter.f64_gauge(metric_name);
+                        if let Some(u) = unit {
+                            b = b.with_unit(u.to_owned());
+                        }
+                        b.build()
+                    },
                     |rec| rec.record(value, attributes),
                 );
             }
@@ -164,6 +220,7 @@ impl Instruments {
 pub(crate) struct MetricVisitor<'a> {
     attributes: &'a mut SmallVec<[KeyValue; 8]>,
     visited_metrics: &'a mut SmallVec<[(&'static str, InstrumentType); 2]>,
+    unit: &'a mut Option<String>,
 }
 
 impl Visit for MetricVisitor<'_> {
@@ -240,6 +297,10 @@ impl Visit for MetricVisitor<'_> {
     }
 
     fn record_str(&mut self, field: &Field, value: &str) {
+        if field.name() == METRIC_UNIT_FIELD {
+            *self.unit = Some(value.to_owned());
+            return;
+        }
         self.attributes
             .push(KeyValue::new(field.name(), value.to_owned()));
     }
@@ -357,6 +418,19 @@ impl Visit for MetricVisitor<'_> {
 /// info!(monotonic_counter.foo = 1, bar = "baz", qux = 2);
 /// ```
 ///
+/// # Units
+///
+/// A unit can be associated with a metric by adding an `otel.unit` field
+/// to the event. The unit is applied to the instrument when it is first created.
+/// Subsequent events for the same metric name that provide a different (or no)
+/// unit will have no effect on the unit.
+///
+/// ```
+/// # use tracing::info;
+/// info!(monotonic_counter.foo = 1_u64, otel.unit = "By");
+/// info!(histogram.bar = 1.4_f64, otel.unit = "ms");
+/// ```
+///
 /// # Implementation Details
 ///
 /// `MetricsLayer` holds a set of maps, with each map corresponding to a
@@ -449,13 +523,15 @@ where
     fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
         let mut attributes = SmallVec::new();
         let mut visited_metrics = SmallVec::new();
+        let mut unit: Option<String> = None;
         let mut metric_visitor = MetricVisitor {
             attributes: &mut attributes,
             visited_metrics: &mut visited_metrics,
+            unit: &mut unit,
         };
         event.record(&mut metric_visitor);
 
-        // associate attrivutes with visited metrics
+        // associate attributes with visited metrics
         visited_metrics
             .into_iter()
             .for_each(|(metric_name, value)| {
@@ -463,6 +539,7 @@ where
                     &self.meter,
                     value,
                     metric_name,
+                    unit.as_deref(),
                     attributes.as_slice(),
                 );
             })
