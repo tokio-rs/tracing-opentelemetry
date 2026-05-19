@@ -1008,7 +1008,6 @@ where
         let span = subscriber
             .span(id)
             .expect("registry should have a span for the current ID");
-
         let lookup = span.extensions().get::<OtelDataLock>().cloned();
         lookup
     }
@@ -1083,8 +1082,7 @@ where
             .downcast_ref::<OpenTelemetryLayer<S, T>>()
             .expect("layer should downcast to expected type; this is a bug!");
         if let Some(otel_data) = Self::lookup_otel_data(dispatch, id) {
-            let current_cx = layer.ensure_context_snapshot(&otel_data);
-            f(&current_cx);
+            f(&layer.ensure_context_snapshot(&otel_data));
         }
     }
 
