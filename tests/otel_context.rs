@@ -175,3 +175,33 @@ fn test_span_ref_ext_from_separate_layer() {
         "Child span should have parent span as its parent"
     );
 }
+
+#[test]
+#[cfg(__reentrant_tracing_test)]
+fn test_get_otel_context_reentrant_attach_path() {
+    let (_tracer, provider, exporter, custom_layer, subscriber) = test_tracer_with_custom_layer();
+
+    tracing::subscriber::with_default(subscriber, || {
+        let _span = tracing::info_span!("reentrant_parent").entered();
+        tracing::info!("reentrant event while parent is attached");
+    });
+
+    drop(provider);
+
+    let spans = exporter.0.lock().unwrap();
+    assert_eq!(spans.len(), 1, "Expected 1 span to be exported");
+
+    let extracted_contexts = custom_layer.get_extracted_contexts();
+    assert_eq!(
+        extracted_contexts.len(),
+        1,
+        "Expected the custom layer to extract the reentrant parent context"
+    );
+
+    let extracted = extracted_contexts[0].span().span_context().span_id();
+    let exported = spans[0].span_context.span_id();
+    assert_eq!(
+        extracted, exported,
+        "Reentrant attach should still yield the active span context"
+    );
+}
