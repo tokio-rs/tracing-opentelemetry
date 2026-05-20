@@ -29,7 +29,11 @@ jobs:
   security_audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rs/audit-check@v1
+      - uses: actions/checkout@v6
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+      - name: Run cargo-deny checks
+        run: cargo deny check --config deny.toml
+      - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
