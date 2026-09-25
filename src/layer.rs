@@ -13,7 +13,7 @@ use std::thread;
 use std::time::Instant;
 use std::{any::TypeId, borrow::Cow};
 use std::{fmt, vec};
-use std::{marker, mem::take};
+use std::{marker, mem};
 use tracing_core::span::{self, Attributes, Id, Record};
 use tracing_core::{field, Event, Subscriber};
 #[cfg(feature = "tracing-log")]
@@ -41,13 +41,49 @@ std::thread_local! {
     static INSIDE_TRACING: Cell<bool> = const { Cell::new(false) };
 }
 
+struct ReentrantTracingGuard {
+    previous: bool,
+}
+
+impl ReentrantTracingGuard {
+    fn enter() -> Self {
+        let previous = INSIDE_TRACING.with(|inside| {
+            let previous = inside.get();
+            inside.set(true);
+            previous
+        });
+        Self { previous }
+    }
+}
+
+impl Drop for ReentrantTracingGuard {
+    fn drop(&mut self) {
+        INSIDE_TRACING.with(|inside| inside.set(self.previous));
+    }
+}
+
 fn prevent_reentrant_call<T>(f: impl FnOnce() -> T) -> T {
-    let old_value = INSIDE_TRACING.with(|inside| inside.replace(true));
+    let _guard = ReentrantTracingGuard::enter();
     #[cfg(all(test, __reentrant_tracing_test))]
     tracing::info!("This should not deadlock...");
-    let result = f();
-    INSIDE_TRACING.with(|inside| inside.set(old_value));
-    result
+    f()
+}
+
+enum ContextActivation {
+    Ready(OtelContext),
+    Start {
+        builder: SpanBuilder,
+        parent_cx: OtelContext,
+        status: Status,
+    },
+}
+
+enum DeferredContextAction {
+    None,
+    Update {
+        updates: SpanBuilderUpdates,
+        current_cx: OtelContext,
+    },
 }
 
 /// An [OpenTelemetry] propagation layer for use in a project that uses
@@ -937,7 +973,7 @@ where
                 if let Some(otel_data) = extensions.get::<OtelDataLock>() {
                     // If the parent span has a span builder the parent span should be started
                     // so we get a proper context with the parent span.
-                    return self.with_started_cx(&mut otel_data.lock(), &|cx| cx.clone());
+                    return self.ensure_context_snapshot(otel_data);
                 }
             }
         }
@@ -955,13 +991,25 @@ where
                         let extensions = span.extensions();
                         extensions
                             .get::<OtelDataLock>()
-                            .map(|data| self.with_started_cx(&mut data.lock(), &|cx| cx.clone()))
+                            .map(|data| self.ensure_context_snapshot(data))
                     })
                     .unwrap_or_else(OtelContext::current)
             }
         } else {
             OtelContext::default()
         }
+    }
+
+    /// Returns the span-local OpenTelemetry storage for the given tracing span ID.
+    fn lookup_otel_data(dispatch: &tracing::Dispatch, id: &span::Id) -> Option<OtelDataLock> {
+        let subscriber = dispatch
+            .downcast_ref::<S>()
+            .expect("subscriber should downcast to expected type; this is a bug!");
+        let span = subscriber
+            .span(id)
+            .expect("registry should have a span for the current ID");
+        let lookup = span.extensions().get::<OtelDataLock>().cloned();
+        lookup
     }
 
     /// Provides access to the OpenTelemetry data (`OtelData`) stored in a tracing span.
@@ -977,16 +1025,10 @@ where
     ///   associated with the tracing span
     ///
     fn get_context(dispatch: &tracing::Dispatch, id: &span::Id, f: &mut dyn FnMut(&mut OtelData)) {
-        let subscriber = dispatch
-            .downcast_ref::<S>()
-            .expect("subscriber should downcast to expected type; this is a bug!");
-        let span = subscriber
-            .span(id)
-            .expect("registry should have a span for the current ID");
-
-        let otel_data = span.extensions().get::<OtelDataLock>().cloned();
-        if let Some(otel_data) = otel_data {
-            f(&mut otel_data.lock());
+        if let Some(otel_data) = Self::lookup_otel_data(dispatch, id) {
+            let mut locked = otel_data.lock();
+            locked = otel_data.wait_while_starting(locked);
+            f(&mut locked);
         }
     }
 
@@ -1011,21 +1053,11 @@ where
             .downcast_ref::<OpenTelemetryLayer<S, T>>()
             .expect("layer should downcast to expected type; this is a bug!");
 
-        let subscriber = dispatch
-            .downcast_ref::<S>()
-            .expect("subscriber should downcast to expected type; this is a bug!");
-
-        let span = subscriber
-            .span(id)
-            .expect("registry should have a span for the current ID");
-
-        let otel_data = span.extensions().get::<OtelDataLock>().cloned();
-
-        if let Some(otel_data) = otel_data {
-            let mut otel_data = otel_data.lock();
-            // Activate the context
-            layer.start_cx(&mut otel_data);
-            f(&mut otel_data);
+        if let Some(otel_data) = Self::lookup_otel_data(dispatch, id) {
+            layer.ensure_context_snapshot(&otel_data);
+            let mut locked = otel_data.lock();
+            locked = otel_data.wait_while_starting(locked);
+            f(&mut locked);
         }
     }
 
@@ -1043,14 +1075,15 @@ where
     /// * `f` - The closure to invoke with a reference to the OTel `Context`
     fn get_activated_otel_context(
         dispatch: &tracing::Dispatch,
-        span: &span::Id,
+        id: &span::Id,
         f: &mut dyn FnMut(&OtelContext),
     ) {
-        Self::get_activated_context(dispatch, span, &mut |otel_data: &mut OtelData| {
-            if let OtelDataState::Context { current_cx } = &otel_data.state {
-                f(current_cx)
-            }
-        });
+        let layer = dispatch
+            .downcast_ref::<OpenTelemetryLayer<S, T>>()
+            .expect("layer should downcast to expected type; this is a bug!");
+        if let Some(otel_data) = Self::lookup_otel_data(dispatch, id) {
+            f(&layer.ensure_context_snapshot(&otel_data));
+        }
     }
 
     fn extra_span_attrs(&self) -> usize {
@@ -1074,32 +1107,59 @@ where
     /// Builds the OTel span associated with given OTel context, consuming the SpanBuilder within
     /// the context in the process.
     ///
-    fn start_cx(&self, otel_data: &mut OtelData) {
-        if let OtelDataState::Context { .. } = &otel_data.state {
-            // If the context is already started, we do nothing.
-        } else if let OtelDataState::Builder {
-            builder,
-            parent_cx,
-            status,
-        } = take(&mut otel_data.state)
-        {
-            // We purposefully disable all tracing inside this call. Whoever called this is holding
-            // a lock on `OtelData` and this is not reentrant.
-            let current_cx = prevent_reentrant_call(|| {
-                let mut span = builder.start_with_context(&self.tracer, &parent_cx);
-                span.set_status(status);
-                parent_cx.with_span(span)
-            });
-
-            otel_data.state = OtelDataState::Context { current_cx };
+    fn activate_context(&self, otel_data: &OtelDataLock) -> ContextActivation {
+        let mut locked = otel_data.lock();
+        loop {
+            match &locked.state {
+                OtelDataState::Context { current_cx } => {
+                    return ContextActivation::Ready(current_cx.clone());
+                }
+                OtelDataState::Starting => {
+                    locked = otel_data.wait(locked);
+                }
+                OtelDataState::Builder { .. } => {
+                    let state = mem::replace(&mut locked.state, OtelDataState::Starting);
+                    match state {
+                        OtelDataState::Builder {
+                            builder,
+                            parent_cx,
+                            status,
+                        } => {
+                            return ContextActivation::Start {
+                                builder,
+                                parent_cx,
+                                status,
+                            }
+                        }
+                        _ => unreachable!("state changed while activating context"),
+                    }
+                }
+            }
         }
     }
 
-    fn with_started_cx<U>(&self, otel_data: &mut OtelData, f: &dyn Fn(&OtelContext) -> U) -> U {
-        self.start_cx(otel_data);
-        match &otel_data.state {
-            OtelDataState::Context { current_cx, .. } => prevent_reentrant_call(|| f(current_cx)),
-            _ => panic!("OtelDataState should be a Context after starting it; this is a bug!"),
+    fn ensure_context_snapshot(&self, otel_data: &OtelDataLock) -> OtelContext {
+        match self.activate_context(otel_data) {
+            ContextActivation::Ready(current_cx) => current_cx,
+            ContextActivation::Start {
+                builder,
+                parent_cx,
+                status,
+            } => {
+                let current_cx = prevent_reentrant_call(|| {
+                    let mut span = builder.start_with_context(&self.tracer, &parent_cx);
+                    span.set_status(status);
+                    parent_cx.with_span(span)
+                });
+
+                let mut locked = otel_data.lock();
+                locked.state = OtelDataState::Context {
+                    current_cx: current_cx.clone(),
+                };
+                drop(locked);
+                otel_data.notify_all();
+                current_cx
+            }
         }
     }
 }
@@ -1211,14 +1271,11 @@ where
         let span = ctx.span(id).expect("Span not found, this is a bug");
 
         if self.context_activation {
-            // We must not hold the extensions when starting the context to avoid potential
-            // deadlocks.
             let otel_data = span.extensions().get::<OtelDataLock>().cloned();
             if let Some(otel_data) = otel_data {
-                self.with_started_cx(&mut otel_data.lock(), &|cx| {
-                    let guard = prevent_reentrant_call(|| cx.clone().attach());
-                    GUARD_STACK.with(|stack| stack.borrow_mut().push(id.clone(), guard));
-                });
+                let current_cx = self.ensure_context_snapshot(&otel_data);
+                let guard = prevent_reentrant_call(|| current_cx.attach());
+                GUARD_STACK.with(|stack| stack.borrow_mut().push(id.clone(), guard));
             }
 
             if !self.tracked_inactivity {
@@ -1278,17 +1335,35 @@ where
         });
         let extensions = span.extensions();
         if let Some(otel_data) = extensions.get::<OtelDataLock>() {
-            match &mut otel_data.lock().state {
-                OtelDataState::Builder {
-                    builder, status, ..
-                } => {
-                    // If the builder is present, then update it.
-                    updates.update(builder, status);
+            let deferred = {
+                let mut locked = otel_data.lock();
+                locked = otel_data.wait_while_starting(locked);
+                match &mut locked.state {
+                    OtelDataState::Builder {
+                        builder, status, ..
+                    } => {
+                        // If the builder is present, then update it.
+                        updates.update(builder, status);
+                        DeferredContextAction::None
+                    }
+                    OtelDataState::Context { current_cx, .. } => DeferredContextAction::Update {
+                        updates,
+                        current_cx: current_cx.clone(),
+                    },
+                    OtelDataState::Starting => {
+                        unreachable!("wait_while_starting returned while starting")
+                    }
                 }
-                OtelDataState::Context { current_cx, .. } => {
-                    // If the Context has been created, then update the span.
+            };
+
+            if let DeferredContextAction::Update {
+                updates,
+                current_cx,
+            } = deferred
+            {
+                prevent_reentrant_call(|| {
                     updates.update_span(&current_cx.span());
-                }
+                });
             }
         }
     }
@@ -1310,26 +1385,37 @@ where
                 return; // The span must already have been closed by us
             };
 
-            let follows_data = follows_data.clone();
-            let mut follows_locked = follows_data.lock();
-            // We drop the extensions lock only after locking the inside. This is because we want to
-            // hinder potential `close` on the follows span. If we hold one or the other lock, the
-            // close implementation cannot progress to remove the span.
+            let follows_context = self
+                .ensure_context_snapshot(follows_data)
+                .span()
+                .span_context()
+                .clone();
             drop(follows_extensions);
 
-            let follows_context =
-                self.with_started_cx(&mut follows_locked, &|cx| cx.span().span_context().clone());
-            match &mut data.lock().state {
-                OtelDataState::Builder { builder, .. } => {
-                    if let Some(ref mut links) = builder.links {
-                        links.push(otel::Link::with_context(follows_context));
-                    } else {
-                        builder.links = Some(vec![otel::Link::with_context(follows_context)]);
+            let deferred_link = {
+                let mut locked = data.lock();
+                locked = data.wait_while_starting(locked);
+                match &mut locked.state {
+                    OtelDataState::Builder { builder, .. } => {
+                        if let Some(ref mut links) = builder.links {
+                            links.push(otel::Link::with_context(follows_context.clone()));
+                        } else {
+                            builder.links =
+                                Some(vec![otel::Link::with_context(follows_context.clone())]);
+                        }
+                        None
+                    }
+                    OtelDataState::Context { current_cx, .. } => Some(current_cx.clone()),
+                    OtelDataState::Starting => {
+                        unreachable!("wait_while_starting returned while starting")
                     }
                 }
-                OtelDataState::Context { current_cx, .. } => {
-                    prevent_reentrant_call(|| current_cx.span().add_link(follows_context, vec![]));
-                }
+            };
+
+            if let Some(current_cx) = deferred_link {
+                prevent_reentrant_call(|| {
+                    current_cx.span().add_link(follows_context, vec![]);
+                });
             }
         }
     }
@@ -1438,35 +1524,52 @@ where
                     }
                 }
 
-                match &mut otel_data.lock().state {
-                    OtelDataState::Builder {
-                        builder, status, ..
-                    } => {
-                        if *status == otel::Status::Unset
-                            && *meta.level() == tracing_core::Level::ERROR
-                        {
-                            *status = otel::Status::error("");
+                let deferred = {
+                    let mut locked = otel_data.lock();
+                    locked = otel_data.wait_while_starting(locked);
+                    match &mut locked.state {
+                        OtelDataState::Builder {
+                            builder, status, ..
+                        } => {
+                            if *status == otel::Status::Unset
+                                && *meta.level() == tracing_core::Level::ERROR
+                            {
+                                *status = otel::Status::error("");
+                            }
+                            if let Some(builder_updates) = builder_updates.take() {
+                                builder_updates.update(builder, status);
+                            }
+                            if let Some(ref mut events) = builder.events {
+                                events.push(otel_event);
+                            } else {
+                                builder.events = Some(vec![otel_event]);
+                            }
+                            None
                         }
-                        if let Some(builder_updates) = builder_updates {
-                            builder_updates.update(builder, status);
-                        }
-                        if let Some(ref mut events) = builder.events {
-                            events.push(otel_event);
-                        } else {
-                            builder.events = Some(vec![otel_event]);
+                        OtelDataState::Context { current_cx, .. } => Some((
+                            current_cx.clone(),
+                            otel_event,
+                            *meta.level() == tracing_core::Level::ERROR,
+                            builder_updates.take(),
+                        )),
+                        OtelDataState::Starting => {
+                            unreachable!("wait_while_starting returned while starting")
                         }
                     }
-                    OtelDataState::Context { current_cx, .. } => {
+                };
+
+                if let Some((current_cx, otel_event, set_error, builder_updates)) = deferred {
+                    prevent_reentrant_call(|| {
                         let span = current_cx.span();
                         // TODO:ban fix this with accessor in SpanRef that can check the span status
-                        if *meta.level() == tracing_core::Level::ERROR {
+                        if set_error {
                             span.set_status(otel::Status::error(""));
                         }
                         if let Some(builder_updates) = builder_updates {
                             builder_updates.update_span(&span);
                         }
                         span.add_event(otel_event.name, otel_event.attributes);
-                    }
+                    });
                 }
             };
         }
@@ -1489,9 +1592,8 @@ where
         };
 
         if let Some(otel_data_lock) = otel_data_lock {
-            // If we cannot lock this, someone else is still doing some operations on this span.
-            // Wait until they're finished.
-            drop(otel_data_lock.lock());
+            // Wait until any in-flight span start finishes before taking ownership.
+            drop(otel_data_lock.wait_while_starting(otel_data_lock.lock()));
             debug_assert!(
                 Arc::strong_count(&otel_data_lock.inner) == 1,
                 "OtelDataLock should not be held by anything else when closing spans. This is a bug in `tracing-opentelemetry`, please file a bug report. This will be ignored when compiled with --release."
@@ -1504,9 +1606,7 @@ where
                 "OtelDataLock should never be made into `Weak`. This is a bug in `tracing-opentelemetry`, please file a bug report. This will be ignored when compiled with --release."
             );
 
-            let otel_data = Arc::try_unwrap(otel_data_lock.inner)
-                .map(|lock| lock.into_inner().unwrap())
-                .unwrap_or_else(|otel_data| otel_data.lock().unwrap().clone());
+            let otel_data = otel_data_lock.into_inner_or_clone();
 
             // Append busy/idle timings when enabled.
             let timings = timings.map(|timings| {
@@ -1548,6 +1648,7 @@ where
                         .end_time
                         .map_or_else(|| span.end(), |end_time| span.end_with_timestamp(end_time));
                 }
+                OtelDataState::Starting => unreachable!("span close waited for startup to finish"),
             }
         }
     }

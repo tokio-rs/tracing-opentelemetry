@@ -123,7 +123,7 @@ mod span_ext;
 mod stack;
 
 use std::{
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Condvar, Mutex, MutexGuard},
     time::SystemTime,
 };
 
@@ -134,19 +134,55 @@ pub use metrics::MetricsLayer;
 pub use otel_context::get_otel_context;
 pub use span_ext::{OpenTelemetrySpanExt, SetParentError};
 
+#[derive(Debug)]
+struct OtelDataInner {
+    data: Mutex<OtelData>,
+    ready: Condvar,
+}
+
 #[derive(Debug, Clone)]
 struct OtelDataLock {
-    inner: Arc<Mutex<OtelData>>,
+    inner: Arc<OtelDataInner>,
 }
 
 impl OtelDataLock {
     fn lock(&self) -> MutexGuard<'_, OtelData> {
-        self.inner.lock().expect("otel data lock poisoned")
+        self.inner.data.lock().expect("otel data lock poisoned")
+    }
+
+    fn wait<'a>(&self, guard: MutexGuard<'a, OtelData>) -> MutexGuard<'a, OtelData> {
+        self.inner
+            .ready
+            .wait(guard)
+            .expect("otel data lock poisoned while waiting")
+    }
+
+    fn wait_while_starting<'a>(
+        &self,
+        mut guard: MutexGuard<'a, OtelData>,
+    ) -> MutexGuard<'a, OtelData> {
+        while matches!(guard.state, OtelDataState::Starting) {
+            guard = self.wait(guard);
+        }
+        guard
+    }
+
+    fn notify_all(&self) {
+        self.inner.ready.notify_all();
+    }
+
+    fn into_inner_or_clone(self) -> OtelData {
+        Arc::try_unwrap(self.inner)
+            .map(|inner| inner.data.into_inner().expect("otel data lock poisoned"))
+            .unwrap_or_else(|inner| inner.data.lock().expect("otel data lock poisoned").clone())
     }
 
     fn new(inner: OtelData) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(inner)),
+            inner: Arc::new(OtelDataInner {
+                data: Mutex::new(inner),
+                ready: Condvar::new(),
+            }),
         }
     }
 }
@@ -170,6 +206,8 @@ pub(crate) enum OtelDataState {
         builder: opentelemetry::trace::SpanBuilder,
         status: opentelemetry::trace::Status,
     },
+    /// The span is being started outside the lock. Waiters should block until it completes.
+    Starting,
     /// The span has been started or accessed and is now in a context.
     Context { current_cx: opentelemetry::Context },
 }
