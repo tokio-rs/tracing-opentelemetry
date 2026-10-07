@@ -123,7 +123,7 @@ mod span_ext;
 mod stack;
 
 use std::{
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard, OnceLock},
     time::SystemTime,
 };
 
@@ -151,6 +151,37 @@ impl OtelDataLock {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct OpenTelemetryIds {
+    ids: Arc<OnceLock<OpenTelemetryIdsInner>>,
+}
+
+#[derive(Debug)]
+struct OpenTelemetryIdsInner {
+    trace_id: opentelemetry::TraceId,
+    span_id: opentelemetry::SpanId,
+}
+
+impl OpenTelemetryIds {
+    pub fn empty() -> Self {
+        Self {
+            ids: Arc::new(OnceLock::new()),
+        }
+    }
+
+    pub fn set(&self, trace_id: opentelemetry::TraceId, span_id: opentelemetry::SpanId) {
+        _ = self.ids.set(OpenTelemetryIdsInner { trace_id, span_id });
+    }
+
+    pub fn trace_id(&self) -> Option<opentelemetry::TraceId> {
+        self.ids.get().map(|ids| ids.trace_id)
+    }
+
+    pub fn span_id(&self) -> Option<opentelemetry::SpanId> {
+        self.ids.get().map(|ids| ids.span_id)
+    }
+}
+
 /// Per-span OpenTelemetry data tracked by this crate.
 #[derive(Debug, Clone)]
 struct OtelData {
@@ -158,6 +189,8 @@ struct OtelData {
     state: OtelDataState,
     /// The end time of the span if it has been exited.
     end_time: Option<SystemTime>,
+    /// Trace ID and span ID that can be retrieved through `OpenTelemetryIds` from extensions.
+    ids: OpenTelemetryIds,
 }
 
 /// The state of the OpenTelemetry data for a span.
