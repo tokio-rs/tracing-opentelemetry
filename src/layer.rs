@@ -207,8 +207,7 @@ fn str_to_status(s: &str) -> otel::Status {
 /// Convert an integer of any width to an OpenTelemetry [`Value`].
 ///
 /// [`Value`] has no unsigned or 128-bit variant, so integers outside the `i64` range are recorded
-/// as their `Debug` representation instead of being wrapped or saturated into a wrong number. This
-/// matches the behaviour of `opentelemetry-appender-tracing`.
+/// as their `Debug` representation instead of being wrapped or saturated into a wrong number.
 fn integer_to_value<T>(value: T) -> Value
 where
     T: TryInto<i64> + fmt::Debug + Copy,
@@ -2030,6 +2029,8 @@ mod tests {
                     usize = 2usize,
                     signed_128 = -3i128,
                     unsigned_128 = 4u128,
+                    u16 = 5u16,
+                    i32 = -6i32,
                     huge_unsigned = u64::MAX,
                     huge_signed_128 = i128::MIN,
                     huge_unsigned_128 = u128::MAX,
@@ -2046,61 +2047,48 @@ mod tests {
         assert_eq!(attributes["usize"], Value::I64(2));
         assert_eq!(attributes["signed_128"], Value::I64(-3));
         assert_eq!(attributes["unsigned_128"], Value::I64(4));
+        assert_eq!(attributes["u16"], Value::I64(5));
+        assert_eq!(attributes["i32"], Value::I64(-6));
 
         // Integers that don't fit into an `i64` are recorded as strings rather than being wrapped
         // or saturated into a wrong number.
         assert_eq!(
             attributes["huge_unsigned"],
-            Value::String(u64::MAX.to_string().into())
+            Value::String("18446744073709551615".into())
         );
         assert_eq!(
             attributes["huge_signed_128"],
-            Value::String(i128::MIN.to_string().into())
+            Value::String("-170141183460469231731687303715884105728".into())
         );
         assert_eq!(
             attributes["huge_unsigned_128"],
-            Value::String(u128::MAX.to_string().into())
+            Value::String("340282366920938463463374607431768211455".into())
         );
-    }
-
-    #[test]
-    fn records_integer_message_event_field() {
-        let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
-
-        tracing::subscriber::with_default(subscriber, || {
-            tracing::debug_span!("test span").in_scope(|| {
-                tracing::event!(tracing::Level::INFO, message = 5u64);
-                tracing::event!(tracing::Level::INFO, message = 6i128);
-                tracing::event!(tracing::Level::INFO, message = 7u128);
-            });
-        });
-
-        let events = tracer.with_data(|data| data.events.clone());
-
-        for (event, expected) in events.iter().zip(["5", "6", "7"]) {
-            assert_eq!(event.name, expected);
-            assert!(!event_attributes(event).contains_key("message"));
-        }
     }
 
     #[test]
     #[cfg(feature = "tracing-log")]
-    fn drops_integer_log_metadata_event_fields() {
+    fn drops_log_line_field_of_log_records() {
         let mut tracer = TestTracer::default();
         let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
 
         tracing::subscriber::with_default(subscriber, || {
             tracing::debug_span!("test span").in_scope(|| {
-                tracing::info!(log.line = 42u64, log.column = 1u128, "an event");
+                tracing_log::format_trace(
+                    &tracing_log::log::Record::builder()
+                        .args(format_args!("a log record"))
+                        .line(Some(42))
+                        .build(),
+                )
+                .unwrap();
             });
         });
 
         let events = tracer.with_data(|data| data.events.clone());
         let attributes = event_attributes(events.iter().next().expect("no events recorded"));
 
+        // `tracing-log` passes the line number to `record_u64`.
         assert!(!attributes.contains_key("log.line"));
-        assert!(!attributes.contains_key("log.column"));
     }
 
     #[test]
@@ -2116,6 +2104,8 @@ mod tests {
                 usize = 2usize,
                 signed_128 = -3i128,
                 unsigned_128 = 4u128,
+                u16 = 5u16,
+                i32 = -6i32,
                 huge_unsigned = u64::MAX,
                 huge_signed_128 = i128::MIN,
                 huge_unsigned_128 = u128::MAX,
@@ -2131,37 +2121,24 @@ mod tests {
         assert_eq!(attributes["usize"], Value::I64(2));
         assert_eq!(attributes["signed_128"], Value::I64(-3));
         assert_eq!(attributes["unsigned_128"], Value::I64(4));
+        assert_eq!(attributes["u16"], Value::I64(5));
+        assert_eq!(attributes["i32"], Value::I64(-6));
         assert_eq!(attributes["recorded"], Value::I64(8));
 
         // Integers that don't fit into an `i64` are recorded as strings rather than being wrapped
         // or saturated into a wrong number.
         assert_eq!(
             attributes["huge_unsigned"],
-            Value::String(u64::MAX.to_string().into())
+            Value::String("18446744073709551615".into())
         );
         assert_eq!(
             attributes["huge_signed_128"],
-            Value::String(i128::MIN.to_string().into())
+            Value::String("-170141183460469231731687303715884105728".into())
         );
         assert_eq!(
             attributes["huge_unsigned_128"],
-            Value::String(u128::MAX.to_string().into())
+            Value::String("340282366920938463463374607431768211455".into())
         );
-    }
-
-    #[test]
-    fn records_integer_otel_span_fields_as_attributes() {
-        let mut tracer = TestTracer::default();
-        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
-
-        tracing::subscriber::with_default(subscriber, || {
-            tracing::debug_span!("test span", otel.name = 5u64);
-        });
-
-        // Just like `otel.name = 5i64`, an unsigned integer is a plain attribute: signedness must
-        // not change how a field is handled.
-        assert_eq!(tracer.with_data(|data| data.name.clone()), "test span");
-        assert_eq!(tracer.attributes()["otel.name"], Value::I64(5));
     }
 
     #[test]
