@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, sync::RwLock};
+use std::{any::TypeId, collections::HashMap, fmt, sync::RwLock};
 use tracing::{field::Visit, Subscriber};
 use tracing_core::{Field, Interest, Metadata};
 
@@ -539,6 +539,20 @@ where
         ctx: Context<'_, S>,
     ) {
         self.inner.on_id_change(old, new, ctx)
+    }
+
+    // Forward to `inner` so that `tracing-subscriber` can tell it is a
+    // per-layer filter. Otherwise, the `Interest::always()` that `inner`
+    // returns from `register_callsite` reads as this layer being interested in
+    // every callsite.
+    //
+    // SAFETY: this is sound as long as the inner implementation is sound.
+    unsafe fn downcast_raw(&self, id: TypeId) -> Option<*const ()> {
+        if id == TypeId::of::<Self>() {
+            Some(self as *const _ as *const ())
+        } else {
+            unsafe { self.inner.downcast_raw(id) }
+        }
     }
 }
 
