@@ -9,7 +9,7 @@ use opentelemetry::{
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use std::thread;
-#[cfg(not(all(target_arch = "wasm32", not(target_os = "wasi"))))]
+#[cfg(not(all(target_family = "wasm", not(target_os = "wasi"))))]
 use std::time::Instant;
 use std::{any::TypeId, borrow::Cow};
 use std::{fmt, vec};
@@ -22,7 +22,7 @@ use tracing_subscriber::layer::Context;
 use tracing_subscriber::layer::Filter;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::Layer;
-#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
+#[cfg(all(target_family = "wasm", not(target_os = "wasi")))]
 use web_time::Instant;
 
 mod filtered;
