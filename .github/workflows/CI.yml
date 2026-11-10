@@ -162,6 +162,18 @@ jobs:
     - name: build all tests
       run: cargo test --no-run --all-features
 
+  build-wasm64:
+    name: build (wasm64-unknown-unknown)
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: rust-src
+    - name: build
+      run: cargo build --all-features -Zbuild-std=std,panic_abort --target wasm64-unknown-unknown
+
   # all required checks except for the main test run (which we only require
   # specific matrix combinations from)
   all_required:
@@ -172,6 +184,7 @@ jobs:
       - cargo-hack
       - check-msrv
       - test-build-across-targets
+      - build-wasm64
       - test
     steps:
       - run: exit 0

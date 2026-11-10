@@ -71,7 +71,7 @@ tracing-subscriber = { version = "0.3.0", default-features = false, features = [
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 pprof = { version = "0.15.0", features = ["flamegraph", "criterion"] }
 
-[target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
+[target.'cfg(all(target_family = "wasm", not(target_os = "wasi")))'.dependencies]
 js-sys = "0.3.64"
 web-time = "1.0.0"
 

@@ -185,12 +185,12 @@ impl Default for OtelDataState {
 pub(crate) mod time {
     use std::time::SystemTime;
 
-    #[cfg(not(all(target_arch = "wasm32", not(target_os = "wasi"))))]
+    #[cfg(not(all(target_family = "wasm", not(target_os = "wasi"))))]
     pub(crate) fn now() -> SystemTime {
         SystemTime::now()
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
+    #[cfg(all(target_family = "wasm", not(target_os = "wasi")))]
     pub(crate) fn now() -> SystemTime {
         SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(js_sys::Date::now() as u64)
     }
