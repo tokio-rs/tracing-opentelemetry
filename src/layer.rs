@@ -1,5 +1,5 @@
 use crate::stack::IdValueStack;
-use crate::{OtelData, OtelDataLock, OtelDataState};
+use crate::{OpenTelemetryIds, OtelData, OtelDataLock, OtelDataState};
 pub use filtered::FilteredOpenTelemetryLayer;
 use opentelemetry::ContextGuard;
 use opentelemetry::{
@@ -1091,6 +1091,10 @@ where
                 parent_cx.with_span(span)
             });
 
+            otel_data.ids.set(
+                current_cx.span().span_context().trace_id(),
+                current_cx.span().span_context().span_id(),
+            );
             otel_data.state = OtelDataState::Context { current_cx };
         }
     }
@@ -1193,6 +1197,8 @@ where
 
         let mut status = Status::Unset;
         updates.update(&mut builder, &mut status);
+        let ids = OpenTelemetryIds::empty();
+        extensions.insert(ids.clone());
         extensions.insert(OtelDataLock::new(OtelData {
             state: OtelDataState::Builder {
                 builder,
@@ -1200,6 +1206,7 @@ where
                 status,
             },
             end_time: None,
+            ids,
         }));
     }
 
@@ -1603,6 +1610,7 @@ mod tests {
     use tracing::trace_span;
     use tracing_core::LevelFilter;
     use tracing_subscriber::prelude::*;
+    use tracing_subscriber::registry::SpanData;
 
     #[derive(Debug, Clone)]
     struct TestTracer {
@@ -2755,5 +2763,40 @@ mod tests {
         assert!(spans
             .iter()
             .any(|span| span.name == "tokio-tracing-span-child"));
+    }
+
+    #[test]
+    fn otel_ids_extension() {
+        let mut tracer = TestTracer::default();
+        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+        let subscriber = Arc::new(subscriber);
+
+        tracing::subscriber::with_default(subscriber.clone(), || {
+            let span = tracing::debug_span!("request", otel.kind = "server");
+
+            let span_data = subscriber.span_data(&span.id().unwrap()).unwrap();
+            let ids = span_data
+                .extensions()
+                .get::<OpenTelemetryIds>()
+                .unwrap()
+                .clone();
+            assert!(ids.trace_id().is_none());
+            assert!(ids.span_id().is_none());
+
+            // Enter and exit instantly on drop
+            _ = span.enter();
+
+            let span_data = subscriber.span_data(&span.id().unwrap()).unwrap();
+            let ids = span_data
+                .extensions()
+                .get::<OpenTelemetryIds>()
+                .unwrap()
+                .clone();
+            assert_ne!(ids.trace_id().unwrap(), opentelemetry::TraceId::INVALID);
+            assert_ne!(ids.span_id().unwrap(), opentelemetry::SpanId::INVALID);
+        });
+
+        let recorded_kind = tracer.with_data(|data| data.span_kind.clone());
+        assert_eq!(recorded_kind, otel::SpanKind::Server)
     }
 }
