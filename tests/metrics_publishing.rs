@@ -23,6 +23,7 @@ async fn u64_counter_is_exported() {
         InstrumentKind::Counter,
         1_u64,
         None,
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -37,6 +38,7 @@ async fn u64_counter_is_exported_i64_at_instrumentation_point() {
         "hello_world2".to_string(),
         InstrumentKind::Counter,
         1_u64,
+        None,
         None,
     );
 
@@ -53,6 +55,7 @@ async fn f64_counter_is_exported() {
         InstrumentKind::Counter,
         1.000000123_f64,
         None,
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -67,6 +70,7 @@ async fn i64_up_down_counter_is_exported() {
         "pebcak".to_string(),
         InstrumentKind::UpDownCounter,
         -5_i64,
+        None,
         None,
     );
 
@@ -83,6 +87,7 @@ async fn i64_up_down_counter_is_exported_u64_at_instrumentation_point() {
         InstrumentKind::UpDownCounter,
         5_i64,
         None,
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -98,6 +103,7 @@ async fn f64_up_down_counter_is_exported() {
         InstrumentKind::UpDownCounter,
         99.123_f64,
         None,
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -108,8 +114,13 @@ async fn f64_up_down_counter_is_exported() {
 
 #[tokio::test]
 async fn u64_gauge_is_exported() {
-    let (subscriber, exporter) =
-        init_subscriber("gygygy".to_string(), InstrumentKind::Gauge, 2_u64, None);
+    let (subscriber, exporter) = init_subscriber(
+        "gygygy".to_string(),
+        InstrumentKind::Gauge,
+        2_u64,
+        None,
+        None,
+    );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(gauge.gygygy = 1_u64);
@@ -120,8 +131,13 @@ async fn u64_gauge_is_exported() {
 
 #[tokio::test]
 async fn f64_gauge_is_exported() {
-    let (subscriber, exporter) =
-        init_subscriber("huitt".to_string(), InstrumentKind::Gauge, 2_f64, None);
+    let (subscriber, exporter) = init_subscriber(
+        "huitt".to_string(),
+        InstrumentKind::Gauge,
+        2_f64,
+        None,
+        None,
+    );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(gauge.huitt = 1_f64);
@@ -132,8 +148,13 @@ async fn f64_gauge_is_exported() {
 
 #[tokio::test]
 async fn i64_gauge_is_exported() {
-    let (subscriber, exporter) =
-        init_subscriber("samsagaz".to_string(), InstrumentKind::Gauge, 2_i64, None);
+    let (subscriber, exporter) = init_subscriber(
+        "samsagaz".to_string(),
+        InstrumentKind::Gauge,
+        2_i64,
+        None,
+        None,
+    );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info!(gauge.samsagaz = 1_i64);
@@ -149,6 +170,7 @@ async fn u64_histogram_is_exported() {
         InstrumentKind::Histogram,
         9_u64,
         None,
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -163,6 +185,7 @@ async fn f64_histogram_is_exported() {
         "abcdefg_racecar".to_string(),
         InstrumentKind::Histogram,
         777.0012_f64,
+        None,
         None,
     );
 
@@ -185,6 +208,7 @@ async fn u64_counter_with_attributes_is_exported() {
             KeyValue::new("str_key_1", "foo"),
             KeyValue::new("bool_key_1", true),
         ]),
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -213,6 +237,7 @@ async fn f64_counter_with_attributes_is_exported() {
             KeyValue::new("str_key_1", "foo"),
             KeyValue::new("bool_key_1", true),
         ]),
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -241,6 +266,7 @@ async fn i64_up_down_counter_with_attributes_is_exported() {
             KeyValue::new("str_key_1", "foo"),
             KeyValue::new("bool_key_1", true),
         ]),
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -269,6 +295,7 @@ async fn f64_up_down_counter_with_attributes_is_exported() {
             KeyValue::new("str_key_1", "foo"),
             KeyValue::new("bool_key_1", true),
         ]),
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -297,6 +324,7 @@ async fn f64_gauge_with_attributes_is_exported() {
             KeyValue::new("str_key_1", "foo"),
             KeyValue::new("bool_key_1", true),
         ]),
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -325,6 +353,7 @@ async fn u64_gauge_with_attributes_is_exported() {
             KeyValue::new("str_key_1", "foo"),
             KeyValue::new("bool_key_1", true),
         ]),
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -353,6 +382,7 @@ async fn i64_gauge_with_attributes_is_exported() {
             KeyValue::new("str_key_1", "foo"),
             KeyValue::new("bool_key_1", true),
         ]),
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -381,6 +411,7 @@ async fn u64_histogram_with_attributes_is_exported() {
             KeyValue::new("str_key_1", "foo"),
             KeyValue::new("bool_key_1", true),
         ]),
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -409,6 +440,7 @@ async fn f64_histogram_with_attributes_is_exported() {
             KeyValue::new("str_key_1", "foo"),
             KeyValue::new("bool_key_1", true),
         ]),
+        None,
     );
 
     tracing::subscriber::with_default(subscriber, || {
@@ -431,6 +463,7 @@ async fn display_attribute_is_exported() {
         InstrumentKind::Counter,
         1_u64,
         Some(vec![KeyValue::new("display_key_1", "display: foo")]),
+        None,
     );
 
     struct DisplayAttribute(String);
@@ -459,6 +492,7 @@ async fn debug_attribute_is_exported() {
         InstrumentKind::Counter,
         1_u64,
         Some(vec![KeyValue::new("debug_key_1", "debug: foo")]),
+        None,
     );
 
     struct DebugAttribute(String);
@@ -480,11 +514,77 @@ async fn debug_attribute_is_exported() {
     });
 }
 
+#[tokio::test]
+async fn unit_is_exported() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Histogram,
+        1.5_f64,
+        None,
+        Some("s".to_string()),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(histogram.hello_world = 1.5_f64, otel.unit = "s");
+        exporter.export().unwrap();
+    });
+}
+
+#[tokio::test]
+async fn default_unit_is_empty() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Histogram,
+        1.5_f64,
+        None,
+        Some("".to_string()),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(histogram.hello_world = 1.5_f64);
+        exporter.export().unwrap();
+    });
+}
+
+#[tokio::test]
+async fn first_unit_wins_when_unit_changes() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Counter,
+        3_u64,
+        None,
+        Some("ms".to_string()),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(monotonic_counter.hello_world = 1_u64, otel.unit = "ms");
+        tracing::info!(monotonic_counter.hello_world = 2_u64, otel.unit = "s");
+        exporter.export().unwrap();
+    });
+}
+
+#[tokio::test]
+async fn otel_unit_is_not_forwarded_as_attribute() {
+    let (subscriber, exporter) = init_subscriber(
+        "hello_world".to_string(),
+        InstrumentKind::Gauge,
+        1_i64,
+        Some(vec![]),
+        None,
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(gauge.hello_world = 1_i64, otel.unit = "Cel");
+        exporter.export().unwrap();
+    });
+}
+
 fn init_subscriber<T>(
     expected_metric_name: String,
     expected_instrument_kind: InstrumentKind,
     expected_value: T,
     expected_attributes: Option<Vec<KeyValue>>,
+    expected_unit: Option<String>,
 ) -> (impl Subscriber + 'static, TestExporter<T>) {
     let reader = ManualReader::builder().build();
     let reader = TestReader {
@@ -499,6 +599,7 @@ fn init_subscriber<T>(
         expected_instrument_kind,
         expected_value,
         expected_attributes,
+        expected_unit,
         reader,
     };
 
@@ -544,6 +645,7 @@ struct TestExporter<T> {
     expected_instrument_kind: InstrumentKind,
     expected_value: T,
     expected_attributes: Option<Vec<KeyValue>>,
+    expected_unit: Option<String>,
     reader: TestReader,
 }
 
@@ -594,6 +696,10 @@ where
 
             scope_metrics.metrics().for_each(|metric| {
                 assert_eq!(metric.name(), self.expected_metric_name);
+
+                if let Some(expected_unit) = &self.expected_unit {
+                    assert_eq!(metric.unit(), expected_unit.as_str());
+                }
 
                 match self.expected_instrument_kind {
                     InstrumentKind::Counter | InstrumentKind::UpDownCounter => {
