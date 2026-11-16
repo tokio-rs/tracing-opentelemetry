@@ -204,6 +204,20 @@ fn str_to_status(s: &str) -> otel::Status {
     }
 }
 
+/// Convert an integer of any width to an OpenTelemetry [`Value`].
+///
+/// [`Value`] has no unsigned or 128-bit variant, so integers outside the `i64` range are recorded
+/// as their `Debug` representation instead of being wrapped or saturated into a wrong number.
+fn integer_to_value<T>(value: T) -> Value
+where
+    T: TryInto<i64> + fmt::Debug + Copy,
+{
+    match value.try_into() {
+        Ok(value) => Value::I64(value),
+        Err(_) => Value::String(format!("{value:?}").into()),
+    }
+}
+
 #[derive(Default)]
 struct SpanBuilderUpdates {
     name: Option<Cow<'static, str>>,
@@ -307,6 +321,57 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
                 self.event_builder
                     .attributes
                     .push(KeyValue::new(name, value));
+            }
+        }
+    }
+
+    /// Record events on the underlying OpenTelemetry [`Span`] from `u64` values.
+    ///
+    /// [`Span`]: opentelemetry::trace::Span
+    fn record_u64(&mut self, field: &field::Field, value: u64) {
+        match field.name() {
+            "message" => self.event_builder.name = value.to_string().into(),
+            // Skip fields that are actually log metadata that have already been handled
+            #[cfg(feature = "tracing-log")]
+            name if name.starts_with("log.") => (),
+            name => {
+                self.event_builder
+                    .attributes
+                    .push(KeyValue::new(name, integer_to_value(value)));
+            }
+        }
+    }
+
+    /// Record events on the underlying OpenTelemetry [`Span`] from `i128` values.
+    ///
+    /// [`Span`]: opentelemetry::trace::Span
+    fn record_i128(&mut self, field: &field::Field, value: i128) {
+        match field.name() {
+            "message" => self.event_builder.name = value.to_string().into(),
+            // Skip fields that are actually log metadata that have already been handled
+            #[cfg(feature = "tracing-log")]
+            name if name.starts_with("log.") => (),
+            name => {
+                self.event_builder
+                    .attributes
+                    .push(KeyValue::new(name, integer_to_value(value)));
+            }
+        }
+    }
+
+    /// Record events on the underlying OpenTelemetry [`Span`] from `u128` values.
+    ///
+    /// [`Span`]: opentelemetry::trace::Span
+    fn record_u128(&mut self, field: &field::Field, value: u128) {
+        match field.name() {
+            "message" => self.event_builder.name = value.to_string().into(),
+            // Skip fields that are actually log metadata that have already been handled
+            #[cfg(feature = "tracing-log")]
+            name if name.starts_with("log.") => (),
+            name => {
+                self.event_builder
+                    .attributes
+                    .push(KeyValue::new(name, integer_to_value(value)));
             }
         }
     }
@@ -529,6 +594,27 @@ impl field::Visit for SpanAttributeVisitor<'_> {
     /// [`Span`]: opentelemetry::trace::Span
     fn record_i64(&mut self, field: &field::Field, value: i64) {
         self.record(KeyValue::new(field.name(), value));
+    }
+
+    /// Set attributes on the underlying OpenTelemetry [`Span`] from `u64` values.
+    ///
+    /// [`Span`]: opentelemetry::trace::Span
+    fn record_u64(&mut self, field: &field::Field, value: u64) {
+        self.record(KeyValue::new(field.name(), integer_to_value(value)));
+    }
+
+    /// Set attributes on the underlying OpenTelemetry [`Span`] from `i128` values.
+    ///
+    /// [`Span`]: opentelemetry::trace::Span
+    fn record_i128(&mut self, field: &field::Field, value: i128) {
+        self.record(KeyValue::new(field.name(), integer_to_value(value)));
+    }
+
+    /// Set attributes on the underlying OpenTelemetry [`Span`] from `u128` values.
+    ///
+    /// [`Span`]: opentelemetry::trace::Span
+    fn record_u128(&mut self, field: &field::Field, value: u128) {
+        self.record(KeyValue::new(field.name(), integer_to_value(value)));
     }
 
     /// Set attributes on the underlying OpenTelemetry [`Span`] from `&str` values.
@@ -1646,6 +1732,14 @@ mod tests {
         }
     }
 
+    fn event_attributes(event: &otel::Event) -> HashMap<String, Value> {
+        event
+            .attributes
+            .iter()
+            .map(|kv| (kv.key.to_string(), kv.value.clone()))
+            .collect()
+    }
+
     impl opentelemetry::trace::Tracer for TestTracer {
         type Span = opentelemetry_sdk::trace::Span;
 
@@ -1920,6 +2014,131 @@ mod tests {
         assert_eq!(iter.next().unwrap().name, "exception"); // error attribute is handled specially
         assert_eq!(iter.next().unwrap().name, "field3"); // message attribute is handled specially
         assert_eq!(iter.next().unwrap().name, "event name 5"); // name attribute should not conflict with event name.
+    }
+
+    #[test]
+    fn records_integer_event_fields() {
+        let mut tracer = TestTracer::default();
+        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug_span!("test span").in_scope(|| {
+                tracing::info!(
+                    signed = -1i64,
+                    unsigned = 1u64,
+                    usize = 2usize,
+                    signed_128 = -3i128,
+                    unsigned_128 = 4u128,
+                    u16 = 5u16,
+                    i32 = -6i32,
+                    huge_unsigned = u64::MAX,
+                    huge_signed_128 = i128::MIN,
+                    huge_unsigned_128 = u128::MAX,
+                    "an event"
+                );
+            });
+        });
+
+        let events = tracer.with_data(|data| data.events.clone());
+        let attributes = event_attributes(events.iter().next().expect("no events recorded"));
+
+        assert_eq!(attributes["signed"], Value::I64(-1));
+        assert_eq!(attributes["unsigned"], Value::I64(1));
+        assert_eq!(attributes["usize"], Value::I64(2));
+        assert_eq!(attributes["signed_128"], Value::I64(-3));
+        assert_eq!(attributes["unsigned_128"], Value::I64(4));
+        assert_eq!(attributes["u16"], Value::I64(5));
+        assert_eq!(attributes["i32"], Value::I64(-6));
+
+        // Integers that don't fit into an `i64` are recorded as strings rather than being wrapped
+        // or saturated into a wrong number.
+        assert_eq!(
+            attributes["huge_unsigned"],
+            Value::String("18446744073709551615".into())
+        );
+        assert_eq!(
+            attributes["huge_signed_128"],
+            Value::String("-170141183460469231731687303715884105728".into())
+        );
+        assert_eq!(
+            attributes["huge_unsigned_128"],
+            Value::String("340282366920938463463374607431768211455".into())
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "tracing-log")]
+    fn drops_log_line_field_of_log_records() {
+        let mut tracer = TestTracer::default();
+        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug_span!("test span").in_scope(|| {
+                tracing_log::format_trace(
+                    &tracing_log::log::Record::builder()
+                        .args(format_args!("a log record"))
+                        .line(Some(42))
+                        .build(),
+                )
+                .unwrap();
+            });
+        });
+
+        let events = tracer.with_data(|data| data.events.clone());
+        let attributes = event_attributes(events.iter().next().expect("no events recorded"));
+
+        // `tracing-log` passes the line number to `record_u64`.
+        assert!(!attributes.contains_key("log.line"));
+    }
+
+    #[test]
+    fn records_integer_span_fields() {
+        let mut tracer = TestTracer::default();
+        let subscriber = tracing_subscriber::registry().with(layer().with_tracer(tracer.clone()));
+
+        tracing::subscriber::with_default(subscriber, || {
+            let span = tracing::debug_span!(
+                "test span",
+                signed = -1i64,
+                unsigned = 1u64,
+                usize = 2usize,
+                signed_128 = -3i128,
+                unsigned_128 = 4u128,
+                u16 = 5u16,
+                i32 = -6i32,
+                huge_unsigned = u64::MAX,
+                huge_signed_128 = i128::MIN,
+                huge_unsigned_128 = u128::MAX,
+                recorded = tracing::field::Empty,
+            );
+            span.record("recorded", 8usize);
+        });
+
+        let attributes = tracer.attributes();
+
+        assert_eq!(attributes["signed"], Value::I64(-1));
+        assert_eq!(attributes["unsigned"], Value::I64(1));
+        assert_eq!(attributes["usize"], Value::I64(2));
+        assert_eq!(attributes["signed_128"], Value::I64(-3));
+        assert_eq!(attributes["unsigned_128"], Value::I64(4));
+        assert_eq!(attributes["u16"], Value::I64(5));
+        assert_eq!(attributes["i32"], Value::I64(-6));
+        assert_eq!(attributes["recorded"], Value::I64(8));
+
+        // Integers that don't fit into an `i64` are recorded as strings rather than being wrapped
+        // or saturated into a wrong number.
+        assert_eq!(
+            attributes["huge_unsigned"],
+            Value::String("18446744073709551615".into())
+        );
+        assert_eq!(
+            attributes["huge_signed_128"],
+            Value::String("-170141183460469231731687303715884105728".into())
+        );
+        assert_eq!(
+            attributes["huge_unsigned_128"],
+            Value::String("340282366920938463463374607431768211455".into())
+        );
     }
 
     #[test]
