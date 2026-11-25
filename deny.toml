@@ -1,0 +1,18 @@
+[graph]
+all-features = true
+
+[advisories]
+unmaintained = "all"
+yanked = "allow"
+ignore = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
