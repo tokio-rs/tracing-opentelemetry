@@ -257,6 +257,9 @@ struct SpanEventVisitor<'a, 'b> {
     event_builder: &'a mut otel::Event,
     span_builder_updates: &'b mut Option<SpanBuilderUpdates>,
     sem_conv_config: SemConvConfig,
+    /// Name requested through the `otel.name` field. It takes precedence over the event message
+    /// and the static event name regardless of the order the fields are recorded in.
+    name_override: Option<Cow<'static, str>>,
 }
 
 impl field::Visit for SpanEventVisitor<'_, '_> {
@@ -317,6 +320,7 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
     fn record_str(&mut self, field: &field::Field, value: &str) {
         match field.name() {
             "message" => self.event_builder.name = value.to_string().into(),
+            SPAN_NAME_FIELD => self.name_override = Some(value.to_string().into()),
             // While tracing supports the error primitive, the instrumentation macro does not
             // use the primitive and instead uses the debug or display primitive.
             // In both cases, an event with an empty name and with an error attribute is created.
@@ -356,6 +360,7 @@ impl field::Visit for SpanEventVisitor<'_, '_> {
     fn record_debug(&mut self, field: &field::Field, value: &dyn fmt::Debug) {
         match field.name() {
             "message" => self.event_builder.name = format!("{value:?}").into(),
+            SPAN_NAME_FIELD => self.name_override = Some(format!("{value:?}").into()),
             // While tracing supports the error primitive, the instrumentation macro does not
             // use the primitive and instead uses the debug or display primitive.
             // In both cases, an event with an empty name and with an error attribute is created.
@@ -1389,11 +1394,18 @@ where
             );
 
             let mut builder_updates = None;
-            event.record(&mut SpanEventVisitor {
+            let mut visitor = SpanEventVisitor {
                 event_builder: &mut otel_event,
                 span_builder_updates: &mut builder_updates,
                 sem_conv_config: self.sem_conv_config,
-            });
+                name_override: None,
+            };
+            event.record(&mut visitor);
+            let name_override = visitor.name_override;
+
+            if let Some(name) = name_override {
+                otel_event.name = name;
+            }
 
             // If the event name is still empty, then there was no special handling of error fields.
             // It should be safe to set the event name to the name provided by tracing.
@@ -1920,6 +1932,62 @@ mod tests {
         assert_eq!(iter.next().unwrap().name, "exception"); // error attribute is handled specially
         assert_eq!(iter.next().unwrap().name, "field3"); // message attribute is handled specially
         assert_eq!(iter.next().unwrap().name, "event name 5"); // name attribute should not conflict with event name.
+    }
+
+    #[test]
+    fn otel_name_overrides_event_name_with_context_activation() {
+        otel_name_overrides_event_name_impl(true);
+    }
+
+    #[test]
+    fn otel_name_overrides_event_name_no_context_activation() {
+        otel_name_overrides_event_name_impl(false);
+    }
+
+    fn otel_name_overrides_event_name_impl(context_activation: bool) {
+        let mut tracer = TestTracer::default();
+        let subscriber = tracing_subscriber::registry().with(
+            layer()
+                .with_tracer(tracer.clone())
+                .with_context_activation(context_activation),
+        );
+        let dynamic_name = String::from("dynamic name");
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug_span!("test span").in_scope(|| {
+                tracing::event!(
+                    tracing::Level::INFO,
+                    otel.name = "name 1",
+                    message = "message 1"
+                );
+                tracing::event!(
+                    tracing::Level::INFO,
+                    message = "message 2",
+                    otel.name = "name 2"
+                );
+                tracing::event!(tracing::Level::INFO, otel.name = %dynamic_name, field = 1);
+                tracing::event!(name: "static name", tracing::Level::INFO, otel.name = "name 4");
+                tracing::event!(tracing::Level::INFO, field = "kept", "message 5");
+            });
+        });
+
+        let events = tracer.with_data(|data| data.events.clone());
+        let names: Vec<_> = events.iter().map(|event| event.name.as_ref()).collect();
+
+        assert_eq!(
+            names,
+            ["name 1", "name 2", "dynamic name", "name 4", "message 5"]
+        );
+        // The special field names the event and is not exported as an attribute.
+        assert!(events.iter().all(|event| event
+            .attributes
+            .iter()
+            .all(|kv| kv.key.as_str() != "otel.name")));
+        let last = events.last().unwrap();
+        assert!(last
+            .attributes
+            .iter()
+            .any(|kv| kv.key.as_str() == "field" && kv.value == Value::from("kept")));
     }
 
     #[test]

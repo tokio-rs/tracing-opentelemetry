@@ -17,7 +17,8 @@
 //!
 //! * `otel.name`: Override the span name sent to OpenTelemetry exporters.
 //!   Setting this field is useful if you want to display non-static information
-//!   in your span name.
+//!   in your span name. When used on an event, it overrides the event name
+//!   instead, taking precedence over the event message.
 //! * `otel.kind`: Set the span kind to one of the supported OpenTelemetry [span kinds]. These must
 //!   be specified as strings such as `"client"` or `"server"`. If it is not specified, the span is
 //!   assumed to be internal.
