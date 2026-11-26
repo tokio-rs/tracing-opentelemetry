@@ -87,6 +87,20 @@
 //! });
 //! ```
 //!
+//! ## Flushing spans on shutdown
+//!
+//! The simple span processor exports a span when it closes. The batch processor queues
+//! closed spans and exports them in groups. A short-lived command can exit with spans
+//! still in that queue.
+//!
+//! When using `with_batch_exporter`, keep the [`SdkTracerProvider`] until the work you
+//! want to trace has finished. Drop the last span handles, then call
+//! [`SdkTracerProvider::shutdown`] before returning from `main`. In a service, do this
+//! after in-flight requests finish during graceful shutdown.
+//!
+//! [`SdkTracerProvider`]: https://docs.rs/opentelemetry_sdk/0.33/opentelemetry_sdk/trace/struct.SdkTracerProvider.html
+//! [`SdkTracerProvider::shutdown`]: https://docs.rs/opentelemetry_sdk/0.33/opentelemetry_sdk/trace/struct.SdkTracerProvider.html#method.shutdown
+//!
 //! ## Feature Flags
 //!
 //! - `metrics`: Enables the [`MetricsLayer`] type, a [layer] that
