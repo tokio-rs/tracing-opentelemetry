@@ -57,9 +57,6 @@
 //!
 //! ## Examples
 //!
-//! Batch exporters queue completed spans before sending them. Keep the SDK tracer provider and
-//! call `shutdown()` after the last span closes to send any remaining spans before exit.
-//!
 //! ```
 //! use opentelemetry_sdk::trace::SdkTracerProvider;
 //! use opentelemetry::trace::{Tracer, TracerProvider as _};
@@ -69,7 +66,7 @@
 //!
 //! // Create a new OpenTelemetry trace pipeline that prints to stdout
 //! let provider = SdkTracerProvider::builder()
-//!     .with_batch_exporter(opentelemetry_stdout::SpanExporter::default())
+//!     .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
 //!     .build();
 //! let tracer = provider.tracer("readme_example");
 //!
@@ -82,18 +79,27 @@
 //!
 //! // Trace executed code
 //! tracing::subscriber::with_default(subscriber, || {
-//!     // The layer queues the span for export when it closes.
+//!     // Spans will be sent to the configured OpenTelemetry exporter
 //!     let root = span!(tracing::Level::TRACE, "app_start", work_units = 2);
 //!     let _enter = root.enter();
 //!
 //!     error!("This event will be logged in the root span.");
 //! });
-//!
-//! provider.shutdown().expect("export buffered spans");
 //! ```
 //!
-//! In a service, use the same shutdown path after a termination signal. Stop taking new work,
-//! let in-flight work finish and its spans close, then shut down the provider.
+//! ## Flushing spans on shutdown
+//!
+//! The simple span processor exports a span when it closes. The batch processor queues
+//! closed spans and exports them in groups. A short-lived command can exit with spans
+//! still in that queue.
+//!
+//! When using `with_batch_exporter`, keep the [`SdkTracerProvider`] until the work you
+//! want to trace has finished. Drop the last span handles, then call
+//! [`SdkTracerProvider::shutdown`] before returning from `main`. In a service, do this
+//! after in-flight requests finish during graceful shutdown.
+//!
+//! [`SdkTracerProvider`]: https://docs.rs/opentelemetry_sdk/0.33/opentelemetry_sdk/trace/struct.SdkTracerProvider.html
+//! [`SdkTracerProvider::shutdown`]: https://docs.rs/opentelemetry_sdk/0.33/opentelemetry_sdk/trace/struct.SdkTracerProvider.html#method.shutdown
 //!
 //! ## Feature Flags
 //!
