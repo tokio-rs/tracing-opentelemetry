@@ -57,6 +57,9 @@
 //!
 //! ## Examples
 //!
+//! Batch exporters queue completed spans before sending them. Keep the SDK tracer provider and
+//! call `shutdown()` after the last span closes to send any remaining spans before exit.
+//!
 //! ```
 //! use opentelemetry_sdk::trace::SdkTracerProvider;
 //! use opentelemetry::trace::{Tracer, TracerProvider as _};
@@ -66,7 +69,7 @@
 //!
 //! // Create a new OpenTelemetry trace pipeline that prints to stdout
 //! let provider = SdkTracerProvider::builder()
-//!     .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
+//!     .with_batch_exporter(opentelemetry_stdout::SpanExporter::default())
 //!     .build();
 //! let tracer = provider.tracer("readme_example");
 //!
@@ -79,13 +82,18 @@
 //!
 //! // Trace executed code
 //! tracing::subscriber::with_default(subscriber, || {
-//!     // Spans will be sent to the configured OpenTelemetry exporter
+//!     // The layer queues the span for export when it closes.
 //!     let root = span!(tracing::Level::TRACE, "app_start", work_units = 2);
 //!     let _enter = root.enter();
 //!
 //!     error!("This event will be logged in the root span.");
 //! });
+//!
+//! provider.shutdown().expect("export buffered spans");
 //! ```
+//!
+//! In a service, use the same shutdown path after a termination signal. Stop taking new work,
+//! let in-flight work finish and its spans close, then shut down the provider.
 //!
 //! ## Feature Flags
 //!
